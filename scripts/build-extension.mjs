@@ -1,0 +1,7 @@
+import { build } from "esbuild";
+import { mkdir, writeFile } from "node:fs/promises";
+
+const outdir = "extension/dist";
+await mkdir(outdir, { recursive: true });
+await build({ entryPoints: ["extension/src/popup.ts", "extension/src/content.ts", "extension/src/background.ts"], outdir, bundle: true, format: "esm", target: ["chrome120"], sourcemap: true });
+await writeFile(`${outdir}/popup.html`, `<!doctype html><html lang="mn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>LearnDub AI</title><style>body{width:300px;margin:0;padding:20px;background:#f8fbf8;color:#1d2927;font:14px Arial}h1{font-size:18px;margin:0 0 8px}p{color:#627067;line-height:1.5;margin:8px 0}#capture-status{font-weight:bold;color:#28785f}.actions{display:grid;gap:8px;margin-top:16px}button{border:0;border-radius:6px;background:#28785f;color:#fff;padding:10px 12px;font-weight:bold;cursor:pointer}button.secondary{background:#e8efeb;color:#1d2927}button:disabled{opacity:.5;cursor:default}</style></head><body><h1>LearnDub AI</h1><p id="status">YouTube видео болон CC хадмал бэлдэнэ үү.</p><p id="capture-status">Төлөв шалгаж байна…</p><div class="actions"><button id="capture-start">Хадмал бичиж эхлэх</button><button id="capture-stop" disabled>Зогсоож VTT татах</button><button class="secondary" id="open-app">LearnDub AI нээх</button></div><script type="module" src="popup.js"></script></body></html>`);

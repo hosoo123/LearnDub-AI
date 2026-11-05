@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LearnDub AI
 
-## Getting Started
+Өөрийн сургалтын видеог Монгол хадмалтай үзэх туршилтын web апп.
 
-First, run the development server:
+## Ажиллуулах
 
-```bash
+Ollama суулгасан, загвар татсан, Ollama ажиллаж байгаа байх шаардлагатай. Жишээ нь:
+
+```powershell
+ollama pull gemma4:e4b
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Дараа нь `http://localhost:3000` нээгээд өөрийн MP4/WebM видео оруулна. Хадмал бэлэн бол **Хадмал оруулах** товчоор SRT/VTT сонго, эсвэл **Видео яриаг таних** товчоор англи ярианаас хугацаатай хадмал үүсгэ. Видео тоглох үед идэвхтэй хадмал дүрсний дээр харагдаж, орчуулсны дараа Монгол текстээр солигдоно; мөр дээр дарж тухайн цаг руу шилжих эсвэл **Засах** товчоор эх текст, орчуулга, эхлэх/дуусах хугацааг засна. Эх текстийг өөрчилбөл хуучин орчуулгыг цэвэрлэж, дахин орчуулах шаардлагатай. Whisper-ийн `onnx-community/whisper-tiny.en` загвар анх удаа ажиллахад татагдаж `%USERPROFILE%\.cache\learndub-ai\whisper` локал cache-д хадгалагдана; видео болон аудио энэ компьютерээс гарахгүй. Яриа танихад FFmpeg/FFprobe PATH-д байх шаардлагатай; нэг видеоны хязгаар 250 MB, 30 минут. Whisper хадмалын мөрүүдийг үг тус бүрээр бус, ярианы хэсгийн timestamp-аар буцаана. **Дутуу мөрийг орчуулах** товч нь зөвхөн орчуулгагүй хадмалыг Gemma руу илгээж, ойролцоох эх хадмал болон өмнө баталсан Монгол орчуулгыг утгын контекст болгон ашиглана; хадгалсан орчуулгыг дарж бичихгүй. Багц бүр 8 хүртэл cue, нийт 5000 тэмдэгтийн хязгаартай. Бүх мөр орчуулагдсаны дараа **VTT татах** товчоор засварласан хугацаа, орчуулгатай `*.mn.vtt` хадмал экспортолж болно. Загварын орчуулга алдаатай байж болох тул үр дүнг шалгана уу.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Анхдагч тохиргоо нь `http://localhost:11434` дээрх Ollama болон `gemma4:e4b` загвар. Шаардлагатай бол `.env.local` файлд `.env.example`-ийн хувьсагчдыг тохируулж болно. Тохиргоо өөрчилсний дараа хөгжүүлэлтийн серверийг дахин асаана.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Яриа таних товчийг ашиглахад эхний удаа Whisper-ийн жижиг англи загварын файлууд Hugging Face-ээс татагдана. Дараагийн хэрэглээнд локал cache-ээс уншина. Интернэт шаардлага зөвхөн анхны model таталтад байна.
 
-## Learn More
+## Орчуулгын нэр томьёоны сан
 
-To learn more about Next.js, take a look at the following resources:
+Ollama руу илгээхдээ хадмалын тухайн багцад таарсан хэлц, нэр томьёог л сангаас сонгон prompt-д нэмнэ. Энгийн харилцан ярианд “чи” хэлбэрийг тогтвортой хэрэглэх, эхэд албан өнгө байвал “та” сонгох, Монгол кириллээр эвдэрхий бичихгүй байхыг загварт сануулна. Сан нь `src/lib/translation-glossary.ts` файлд байна; шинэ үг нэмэхдээ эх хэллэг, санал болгох орчуулга, хэрэглэх нөхцөлийг хамтад нь бичнэ. Загварын гаралтыг заавал хянаарай.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Татсан `mongolian-llama3-v0.1-q4_k_m` загварыг `OLLAMA_MODEL`-д зааж туршиж болно. Гэхдээ энэ загвар аппд нэмэлтээр сургагдаагүй бөгөөд одоогийн JSON хадмалын форматаар найдвартай ажилладаг нь батлагдаагүй тул үндсэн загварын тохиргоо хэвээр `gemma4:e4b` байна.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Шалгалт
 
-## Deploy on Vercel
+```powershell
+npm test
+npm run lint
+npx tsc --noEmit
+npm run build
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Одоогийн хязгаарлалт
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Орчуулгын чанарыг өөрийн жишээ хадмал дээр шалгаж, алдааг засах шаардлагатай.
+- Монгол TTS provider хараахан холбогдоогүй. Browser-д Монгол voice байвал зөвхөн туршилтын уншлага ажиллана.
+- Локал Whisper tiny.en нь хурдан, жижиг англи model боловч нэр, шуугиантай дуу, урт хэсэг дээр алдаж болно; таньсан текстийг шалгаарай.
+- Chrome extension нь web аппыг нээх суурь бөгөөд YouTube-ийн хадмалыг автоматаар уншихгүй.
+- Зөвшөөрөлтэй видео болон хадмал ашиглана уу.
+# LearnDub-AI

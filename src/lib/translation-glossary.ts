@@ -250,6 +250,61 @@ const glossary: GlossaryEntry[] = [
     target: "ширээн дээр",
     context: "юм ширээн дээр байрлаж байгааг хэлэх үед",
   },
+  {
+    source: "what the hell are you doing",
+    target: "Чи юу хийгээд байгаа юм бэ, новш гэж?",
+    context: "уурласан, бүдүүлэг өнгө аясыг хадгалж орчуулах",
+  },
+  {
+    source: "what the fuck are you doing",
+    target: "Чи юу хийгээд байгаа новш вэ?",
+    context: "хүчтэй уурласан, бүдүүлэг доромж өнгө аясыг хадгалж орчуулах",
+  },
+  {
+    source: "what the hell",
+    target: "новш гэж",
+    context: "уурлаж гайхсан ярианы хэллэг; өгүүлбэрийн хэлзүйд тааруулж, хараалын аясыг арилгахгүй орчуулах",
+  },
+  {
+    source: "what the fuck",
+    target: "ямар новш вэ",
+    context: "хүчтэй гайхсан, бүдүүлэг хэллэг; хүчийг нь сулруулахгүй орчуулах",
+  },
+  {
+    source: "fuck off",
+    target: "зайл, новш минь",
+    context: "хүнийг бүдүүлгээр хөөж байгаа үед",
+  },
+  {
+    source: "you have got to be kidding me",
+    target: "Чи тоглоод байгаа юм уу?",
+    context: "итгэхэд бэрх зүйл сонсоод гайхаж, дургүйцсэн ярианд",
+  },
+  {
+    source: "you've got to be kidding me",
+    target: "Чи тоглоод байгаа юм уу?",
+    context: "итгэхэд бэрх зүйл сонсоод гайхаж, дургүйцсэн ярианд",
+  },
+  {
+    source: "i don't give a damn",
+    target: "Надад ёстой падгүй.",
+    context: "ямар нэг зүйлд огт санаа тавихгүйгээ бүдүүлэг, үл тоосон өнгөөр хэлэхэд",
+  },
+  {
+    source: "i don't give a shit",
+    target: "Надад ёстой падлий ч алга.",
+    context: "ямар нэг зүйлд огт санаа тавихгүйгээ хүчтэй бүдүүлэг өнгөөр хэлэхэд",
+  },
+  {
+    source: "this is bullshit",
+    target: "Энэ чинь худлаа шаасан юм.",
+    context: "худал эсвэл утгагүй зүйлд дургүйцсэн өнгөөр хэлэхэд",
+  },
+  {
+    source: "bullshit",
+    target: "худлаа шаасан юм",
+    context: "худал, утгагүй зүйлийг ууртай бүдүүлэг өнгөөр хэлэхэд",
+  },
 ];
 
 function findPhrase(text: string, phrase: string): number | undefined {
@@ -273,6 +328,6 @@ export function formatRelevantGlossary(texts: readonly string[]): string {
 
   return selected
     .sort((a, b) => a.index - b.index)
-    .map(({ entry }) => `- ${entry.source} = ${entry.target}`)
+    .map(({ entry }) => `- ${entry.source} = ${entry.target} (${entry.context})`)
     .join("\n");
 }

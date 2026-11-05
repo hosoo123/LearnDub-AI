@@ -1,5 +1,5 @@
 {
-  "name": "my-new-site",
+  "name": "learndub-ai",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,12 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build",
     "build:extension": "node scripts/build-extension.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.1",
     "next": "16.3.6",
+    "node-edge-tts": "^1.2.12",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

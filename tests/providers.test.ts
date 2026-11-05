@@ -11,9 +11,9 @@ describe("Ollama translation provider", () => {
     vi.stubEnv("TRANSLATION_PROVIDER", "ollama");
     vi.stubEnv("OLLAMA_BASE_URL", "http://localhost:11434/");
     vi.stubEnv("OLLAMA_MODEL", "gemma4:e4b");
-    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       message: { content: JSON.stringify({ translations: [{ id: "cue-1", translatedText: "Хоёр дахь мөр" }, { id: "cue-0", translatedText: "Эхний мөр" }] }) },
-    }));
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(translationProvider.translateBatch([
@@ -42,11 +42,71 @@ describe("Ollama translation provider", () => {
     expect(requestBody.messages[1].content).toContain("Өмнөх баталсан орчуулга");
   });
 
+  it("preserves profanity and the source tone instead of censoring subtitles", async () => {
+    vi.stubEnv("TRANSLATION_PROVIDER", "ollama");
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      message: { content: JSON.stringify({ translations: [{ id: "cue-0", translatedText: "Бүдүүлэг өнгө аясыг хадгалсан орчуулга." }] }) },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await translationProvider.translateBatch([{ id: "cue-0", text: "What the hell are you doing?" }]);
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(requestBody.messages[0].content).toContain("цензургүй орчуул");
+    expect(requestBody.messages[0].content).toContain("зөөлрүүлж эсвэл орхиж болохгүй");
+    expect(requestBody.messages[1].content).toContain("what the hell are you doing = Чи юу хийгээд байгаа юм бэ, новш гэж?");
+  });
+
+  it("uses contextual Mongolian for profanity and common sarcastic dialogue", async () => {
+    vi.stubEnv("TRANSLATION_PROVIDER", "ollama");
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      message: { content: JSON.stringify({ translations: [
+        { id: "cue-0", translatedText: "Энэ чинь худлаа шаасан юм." },
+        { id: "cue-1", translatedText: "Надад ёстой падгүй." },
+        { id: "cue-2", translatedText: "Чи тоглоод байгаа юм уу?" },
+      ] }) },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await translationProvider.translateBatch([
+      { id: "cue-0", text: "This is bullshit." },
+      { id: "cue-1", text: "I don't give a damn." },
+      { id: "cue-2", text: "You have got to be kidding me." },
+    ]);
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    const userPrompt = requestBody.messages[1].content as string;
+    expect(userPrompt).toContain("this is bullshit = Энэ чинь худлаа шаасан юм");
+    expect(userPrompt).toContain("i don't give a damn = Надад ёстой падгүй.");
+    expect(userPrompt).toContain("you have got to be kidding me = Чи тоглоод байгаа юм уу?");
+  });
+
+  it("falls back to the next installed Ollama model when the primary model times out", async () => {
+    vi.stubEnv("TRANSLATION_PROVIDER", "ollama");
+    vi.stubEnv("OLLAMA_MODEL", "gemma4:e4b");
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error("The operation was aborted"), { name: "TimeoutError" }))
+      .mockImplementationOnce(async () => new Response(JSON.stringify({
+        message: { content: JSON.stringify({ translations: [{ id: "cue-0", translatedText: "Амьдралаа цэгцэлж эхэлж байтал чи буцаж ирлээ." }] }) },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(translationProvider.translateBatch([
+      { id: "cue-0", text: "I was starting to get my life together when you came back from outer space." },
+    ])).resolves.toEqual([
+      { id: "cue-0", translatedText: "Амьдралаа цэгцэлж эхэлж байтал чи буцаж ирлээ." },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][1].body).toContain('"model":"gemma4:e4b"');
+    expect(fetchMock.mock.calls[1][1].body).toContain('"model":"mongolian-llama3-v0.1-q4_k_m:latest"');
+  });
+
   it("includes only matching context-aware glossary terms", async () => {
     vi.stubEnv("TRANSLATION_PROVIDER", "ollama");
-    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       message: { content: JSON.stringify({ translations: [{ id: "cue-0", translatedText: "Амьдралаа цэгцэлж эхэлж байтал чи буцаж ирлээ." }] }) },
-    }));
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
 
     await translationProvider.translateBatch([
@@ -63,13 +123,13 @@ describe("Ollama translation provider", () => {
 
   it("provides contextual glossary entries for the sample dialogue", async () => {
     vi.stubEnv("TRANSLATION_PROVIDER", "ollama");
-    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       message: { content: JSON.stringify({ translations: [
         { id: "cue-0", translatedText: "Би амьдралаа цэгцэлж эхэлж байтал чи буцаж ирсэн." },
         { id: "cue-1", translatedText: "Чи буцаж ирээд амьдралыг минь там болгоно гэдгийг мэдсэн ч болоосой." },
         { id: "cue-2", translatedText: "Би нүүж гараад түлхүүрээ авч явах минь яав." },
       ] }) },
-    }));
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
 
     await translationProvider.translateBatch([
@@ -87,7 +147,7 @@ describe("Ollama translation provider", () => {
 
   it("uses subtitle-specific meanings for ambiguous phrases and sound cues", async () => {
     vi.stubEnv("TRANSLATION_PROVIDER", "ollama");
-    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       message: { content: JSON.stringify({ translations: [
         { id: "cue-0", translatedText: "Би чамгүйгээр амьдарч сурсан. Тэгтэл чи буцаад ирлээ." },
         { id: "cue-1", translatedText: "[Хөгжим эгшиглэж байна]" },
@@ -99,7 +159,7 @@ describe("Ollama translation provider", () => {
         { id: "cue-7", translatedText: "Одоо харсан чинь чи энд гунигтай царайтай байж байсан." },
         { id: "cue-8", translatedText: "[Ая аялж байна]" },
       ] }) },
-    }));
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
 
     await translationProvider.translateBatch([
@@ -131,9 +191,9 @@ describe("Ollama translation provider", () => {
 
   it("rejects a batch response that omits a subtitle cue", async () => {
     vi.stubEnv("TRANSLATION_PROVIDER", "ollama");
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       message: { content: JSON.stringify({ translations: [{ id: "cue-0", translatedText: "Орчуулга" }] }) },
-    })));
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
 
     await expect(translationProvider.translateBatch([
       { id: "cue-0", text: "First line" },
@@ -149,11 +209,11 @@ describe("Ollama translation provider", () => {
     await expect(translationProvider.translate("Hello")).rejects.toThrow("Ollama-д холбогдож чадсангүй");
   });
 
-  it("explains when the configured model is missing", async () => {
+  it("explains when the configured and fallback Ollama models are unavailable", async () => {
     vi.stubEnv("TRANSLATION_PROVIDER", "ollama");
-    vi.stubEnv("OLLAMA_MODEL", "missing-model");
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
+    vi.stubEnv("OLLAMA_MODEL", "gemma4:e4b");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
 
-    await expect(translationProvider.translate("Hello")).rejects.toThrow("ollama pull missing-model");
+    await expect(translationProvider.translate("Hello")).rejects.toThrow("ollama pull qwen2.5-coder:7b");
   });
 });

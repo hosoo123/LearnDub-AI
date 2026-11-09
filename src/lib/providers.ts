@@ -1,6 +1,7 @@
 import { formatRelevantGlossary } from "./translation-glossary";
 import { EdgeTTS } from "node-edge-tts";
 import { getSpeechProsody, MONGOLIAN_TTS_VOICES, type MongolianTtsVoice } from "./speech";
+import type { TranslationStyle } from "./translation-style";
 
 export type TranslationResult = { status: "demo" | "ready"; translatedText?: string; message: string };
 export type TranslationSegment = { id: string; text: string; contextTranslation?: string };
@@ -9,8 +10,8 @@ export type TtsResult = { status: "not-configured" | "ready"; audioUrl?: string;
 export type TtsOptions = { voice?: MongolianTtsVoice; sourceText?: string };
 
 export interface TranslationProvider {
-  translate(text: string): Promise<TranslationResult>;
-  translateBatch(segments: TranslationSegment[]): Promise<TranslatedSegment[]>;
+  translate(text: string, style?: TranslationStyle): Promise<TranslationResult>;
+  translateBatch(segments: TranslationSegment[], style?: TranslationStyle): Promise<TranslatedSegment[]>;
 }
 export interface TtsProvider { synthesize(text: string, options?: TtsOptions): Promise<TtsResult>; }
 
@@ -32,11 +33,14 @@ function isTimeoutLikeError(error: unknown) {
   return false;
 }
 
-async function translateBatchWithOllama(segments: TranslationSegment[]): Promise<TranslatedSegment[]> {
+async function translateBatchWithOllama(segments: TranslationSegment[], style: TranslationStyle): Promise<TranslatedSegment[]> {
   const baseUrl = (process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/+$/, "");
   const relevantGlossary = formatRelevantGlossary(segments.map(({ text }) => text));
   const glossaryInstructions = relevantGlossary
     ? `\n\nЭнэ багцад таарсан нэр томьёоны сан. Утга нь тухайн контекстэд тохирч байвал тогтвортой хэрэглэ; хэлц үгийг үгчлэн орчуулж болохгүй:\n${relevantGlossary}`
+    : "";
+  const styleInstructions = style === "song"
+    ? " Энэ багц дууны үг: дууны мөрийн дүрслэл, далд санаа, сэтгэл хөдлөлийг хадгалж, монгол хэлэнд уянгалаг, эвлэг сонсогдохоор чөлөөтэй буулга. Бадгийн давталт, дахилтыг эхтэй адил хадгал; мөр хооронд үг, өгүүлбэрийг давтахгүй, нийлүүлэхгүй. Боломжтой үед байгалийн rhyme/хэмнэлийг хадгалж болно, гэхдээ утга, зөв монгол хэл, хараалын хүчийг хэзээ ч золиосолж болохгүй; эхэд байхгүй rhyme, санаа бүү зохио. Энэ нь дууны үгийг ярианы бус хэллэгээр орчуулах хүсэлт болохоос утгыг өөрчлөх шалтгаан биш."
     : "";
 
   const models = getOllamaModels();
@@ -56,14 +60,14 @@ async function translateBatchWithOllama(segments: TranslationSegment[]): Promise
           messages: [
             {
               role: "system",
-              content: "Чи англи хэлнээс монгол хэл рүү хадмал орчуулдаг туршлагатай орчуулагч. Бүх дараалсан мөрийг эхлээд хамтад нь уншиж, утгыг нь ойлго. Өгүүлбэр хэд хэдэн мөрөнд хуваагдсан бол ойролцоох мөрөөр утгыг нөхөж ойлгоод, мөрийн таслал дээр өгүүлбэрийн утгыг бүү тасал; cue бүрийг монгол хэлэнд байгалийн сонсогдохоор орчуул. Үг бүрийг салгаж шууд орчуулж болохгүй. Хэлц үгийг тухайн харилцан ярианы утгаар нь буулга; нэг үг олон утгатай бол ойр орчмын мөрөөр сонго. Энгийн харилцан ярианд 'чи' хэлбэрийг хэрэглэж, эхэд албан ёсны эсвэл хүндэтгэсэн өнгө тодорхой байвал 'та' хэлбэрийг сонго; нэг ярианд хандлагыг тогтвортой байлга. Монгол кириллээр зөв бичиж, үсэг холих/эвдэрхий үг гаргахгүй; орчуулсны дараа өгүүлбэр бүрийг уншигдах байдал, нөхцөл залгавраар шалгаж зас. Эхэд хараал, бүдүүлэг үг, доромжлол байвал утга, хүч, өнгө аясыг хадгалан цензургүй орчуул; зөөлрүүлж эсвэл орхиж болохгүй. Эхэд байхгүй зүйл нэмэхгүй, нэр болон дууны тэмдэглэгээг хадгал, мөрийг алгасахгүй эсвэл нэгтгэхгүй. Зөвхөн хүссэн бүтэцтэй JSON буцаа; тайлбар бүү нэм.",
+              content: `Чи англи хэлнээс монгол хэл рүү хадмал орчуулдаг туршлагатай орчуулагч. Бүх дараалсан мөрийг эхлээд хамтад нь уншиж, утгыг нь ойлго. Өгүүлбэр хэд хэдэн мөрөнд хуваагдсан бол ойролцоох мөрөөр утгыг нөхөж ойлгоод, мөрийн таслал дээр өгүүлбэрийн утгыг бүү тасал; cue бүрийг монгол хэлэнд байгалийн сонсогдохоор орчуул. Cue бүрд зөвхөн тухайн эх мөрийн утгыг өг: бусад мөрийн үг, санааг давтаж оруулахгүй, орхихгүй, эсвэл нэг мөрөнд бөөгнүүлэхгүй. Нэг хэлц хэд хэдэн cue дамнавал түүний утгыг хамтад нь ойлгож, монгол орчуулгыг cue бүрийн утгад тохируулан давталтгүй, залгамж холбоотой хуваарил; cue бүрийг тусдаа байгалийн үргэлжлэл болго. Жишээ: 'You have got to be' / 'kidding me?' гэсэн хоёр cue-г 'Чи арай' / 'тоглоогүй биз?' гэж хуваарил; нэг бүтэн орчуулгыг хоёр cue-д давтаж болохгүй. Үг бүрийг салгаж шууд орчуулж болохгүй. Хэлц, ёжлол, егөөдөл болон далд утгыг тухайн ярианы нөхцөлөөс зөв тайл; 'you're killing me', 'give me a break' зэрэг олон утгатай хэллэгт үгчилсэн бус, тухайн үзэгдэлд хамгийн зохих монгол хэллэгийг сонго. Нэр томьёоны сан нь зөвхөн утгын чиглэл өгөх тул өгүүлбэрт нь тааруулан нөхцөл, бие, тоо, цагийг зөв хувилгаж хэрэглэ; сангийн хэллэгийг хүчээр үгчлэн хуулж болохгүй. Англи хэлний үгийн дарааллыг бүү дуурай; монгол хүн өдөр тутамдаа хэлэхээр товч, ойлгомжтой өгүүлбэр болго. Энгийн харилцан ярианд 'чи' хэлбэрийг хэрэглэж, эхэд албан ёсны эсвэл хүндэтгэсэн өнгө тодорхой байвал 'та' хэлбэрийг сонго; нэг ярианд хандлагыг тогтвортой байлга. Кирилл үсгээр зөв бичиж, өгүүлбэрийн утга, нөхцөл залгавар, цаг, эзэн бие болон цэг тэмдгийг эцэст нь нягтал; монгол хэлэнд байхгүй илүү үг нэмж, дутуу орчуулгыг хүчээр гүйцээж болохгүй. Эхэд хараал, бүдүүлэг үг, доромжлол байвал утга, хүч, өнгө аясыг хадгалан цензургүй орчуул; зөөлрүүлж эсвэл орхиж болохгүй. Эхэд байхгүй зүйл нэмэхгүй, нэр болон дууны тэмдэглэгээг хадгал, мөрийг алгасахгүй эсвэл нэгтгэхгүй. Зөвхөн хүссэн бүтэцтэй JSON буцаа; тайлбар бүү нэм.${styleInstructions}`,
             },
             {
               role: "user",
-              content: `Дараах хадмалын мөр бүрийг утгаар нь монгол хэл рүү орчуул. contextTranslation нь өмнө баталсан хөрш орчуулга бөгөөд утга, нэр томьёо, өнгө аясыг зөв ойлгоход ашиглана. ID бүрийг хэвээр хадгалж, мөрүүдийг ижил дарааллаар яг нэг удаа буцаа. JSON бүтэц: {"translations":[{"id":"...","translatedText":"..."}]}${glossaryInstructions}\n\n${JSON.stringify(segments)}`,
+              content: `Дараах хадмалын мөр бүрийг утгаар нь монгол хэл рүү орчуул. Нэр томьёоны сангийн хэлц хэд хэдэн cue-г хамарч байвал бүх хэлцэд үйлчилж болно; бүтэн орчуулгыг нэг cue-д шахаж, бусдад давтаж болохгүй. Жишээ нь "You have got to be" / "kidding me?" мөрүүдийг "Чи арай" / "тоглоогүй биз?" гэж тус тусад нь орчуул. contextTranslation нь өмнө баталсан хөрш мөрийн орчуулга тул утга, нэр томьёо, хандлагын залгамж холбоог барихад ашигла; тухайн англи мөрийг өөрөө орчуулахын оронд хуулж болохгүй. ID бүрийг хэвээр хадгалж, мөрүүдийг ижил дарааллаар яг нэг удаа буцаа. JSON бүтэц: {"translations":[{"id":"...","translatedText":"..."}]}${glossaryInstructions}\n\n${JSON.stringify(segments)}`,
             },
           ],
-          options: { temperature: 0.1 },
+          options: { temperature: style === "song" ? 0.2 : 0.1 },
         }),
         cache: "no-store",
         signal: AbortSignal.timeout(OLLAMA_REQUEST_TIMEOUT_MS),
@@ -173,16 +177,21 @@ async function translateBatchWithAzure(segments: TranslationSegment[]): Promise<
   });
 }
 
-async function translateBatch(segments: TranslationSegment[]): Promise<TranslatedSegment[]> {
+async function translateBatch(segments: TranslationSegment[], style: TranslationStyle = "dialogue"): Promise<TranslatedSegment[]> {
   const provider = process.env.TRANSLATION_PROVIDER || "ollama";
-  if (provider === "ollama") return translateBatchWithOllama(segments);
-  if (provider === "azure") return translateBatchWithAzure(segments);
+  if (provider === "ollama") return translateBatchWithOllama(segments, style);
+  if (provider === "azure") {
+    if (style === "song") {
+      throw new TranslationProviderError("Дууны үгийг уянгалаг, контекстэд тохируулж орчуулахад Ollama тохируулна уу. Azure Translator нь энэ тусгай горимыг дэмжихгүй.");
+    }
+    return translateBatchWithAzure(segments);
+  }
   throw new TranslationProviderError("TRANSLATION_PROVIDER нь 'ollama' эсвэл 'azure' байх ёстой.");
 }
 
 export const translationProvider: TranslationProvider = {
-  async translate(text) {
-    const [translated] = await translateBatch([{ id: "single", text }]);
+  async translate(text, style = "dialogue") {
+    const [translated] = await translateBatch([{ id: "single", text }], style);
     return { status: "ready", translatedText: translated.translatedText, message: "Орчуулга бэлэн боллоо." };
   },
   translateBatch,
@@ -190,13 +199,14 @@ export const translationProvider: TranslationProvider = {
 
 export const ttsProvider: TtsProvider = {
   async synthesize(text, { voice = MONGOLIAN_TTS_VOICES.bataa, sourceText = text } = {}) {
-    const prosody = getSpeechProsody(sourceText);
+    const prosody = getSpeechProsody(sourceText, text);
     const provider = new EdgeTTS({
       voice,
       lang: "mn-MN",
-      outputFormat: "audio-24khz-48kbitrate-mono-mp3",
+      outputFormat: "audio-24khz-96kbitrate-mono-mp3",
       rate: prosody.rate,
       pitch: prosody.pitch,
+      volume: prosody.volume,
       timeout: 15_000,
     });
     const chunks: Buffer[] = [];

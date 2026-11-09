@@ -23,6 +23,10 @@ function isTranslationSegment(value: unknown): value is TranslationSegment {
 export async function POST(request: Request) {
   try {
     const body: unknown = await request.json();
+    const style = typeof body === "object" && body !== null && "style" in body ? body.style : "dialogue";
+    if (style !== "dialogue" && style !== "song") {
+      return Response.json({ error: "Орчуулгын төрөл 'dialogue' эсвэл 'song' байх ёстой." }, { status: 400 });
+    }
     if (typeof body === "object" && body !== null && "segments" in body) {
       const segments = body.segments;
       if (!Array.isArray(segments) || segments.length === 0) {
@@ -45,14 +49,14 @@ export async function POST(request: Request) {
         id,
         text: text.trim(),
         ...(typeof contextTranslation === "string" && contextTranslation.trim() ? { contextTranslation: contextTranslation.trim() } : {}),
-      })));
+      })), style);
       return Response.json({ status: "ready", translatedSegments });
     }
 
     const text = typeof body === "object" && body !== null && "text" in body ? (body as { text?: unknown }).text : undefined;
     if (typeof text !== "string" || !text.trim()) return Response.json({ error: "text талбар хоосон байж болохгүй." }, { status: 400 });
     if (text.length > MAX_TEXT_LENGTH) return Response.json({ error: `Текст ${MAX_TEXT_LENGTH} тэмдэгтээс урт байж болохгүй.` }, { status: 413 });
-    return Response.json(await translationProvider.translate(text.trim()));
+    return Response.json(await translationProvider.translate(text.trim(), style));
   } catch (error) {
     if (error instanceof SyntaxError) return Response.json({ error: "Хүсэлтийн JSON формат буруу байна." }, { status: 400 });
     if (error instanceof TranslationProviderError) return Response.json({ error: error.message }, { status: 503 });

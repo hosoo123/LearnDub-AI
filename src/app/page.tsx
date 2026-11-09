@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useSta
 import { applySubtitleEdit, buildMissingTranslationTasks, formatTimestamp, formatTranslatedVtt, MAX_SUBTITLE_FILE_BYTES, MAX_SUBTITLE_TEXT_LENGTH, parseSubtitle, SubtitleSegment } from "@/lib/subtitle-parser";
 import { deleteSavedLesson, listSavedLessons, loadSavedLesson, saveLesson, saveLessonVideo, SavedLesson } from "@/lib/lesson-store";
 import { duckVideoAudio, MONGOLIAN_TTS_VOICES, isMongolianTtsVoice, type MongolianTtsVoice } from "@/lib/speech";
+import { detectTranslationStyle, type TranslationMode } from "@/lib/translation-style";
 
 const MAX_VIDEO_FILE_BYTES = 250 * 1024 * 1024;
 const TRANSLATION_BATCH_SIZE = 8;
@@ -42,6 +43,7 @@ export default function Home() {
   const [isLibraryReady, setIsLibraryReady] = useState(false);
   const [isSavingLesson, setIsSavingLesson] = useState(false);
   const [segments, setSegments] = useState<SubtitleSegment[]>([]);
+  const [translationMode, setTranslationMode] = useState<TranslationMode>("auto");
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -55,6 +57,11 @@ export default function Home() {
   const [segmentDraft, setSegmentDraft] = useState<SegmentDraft>();
   const [message, setMessage] = useState("Видео болон хадмал файл сонгож эхлээрэй.");
   const [error, setError] = useState<string>();
+  const detectedTranslationStyle = useMemo(
+    () => detectTranslationStyle(segments, [videoName, subtitleName]),
+    [segments, subtitleName, videoName],
+  );
+  const translationStyle = translationMode === "auto" ? detectedTranslationStyle : translationMode;
   const allSegmentsTranslated = segments.length > 0 && segments.every((segment) => Boolean(segment.translatedText?.trim()));
   const missingTranslationCount = segments.filter((segment) => !segment.translatedText?.trim()).length;
 
@@ -251,6 +258,7 @@ export default function Home() {
     setVideoFile(file);
     setVideoName(file.name);
     setSegments([]);
+    setTranslationMode("auto");
     cancelSegmentEdit();
     setSubtitleName(undefined);
     setMessage("Видео бэлэн боллоо. Одоо .srt эсвэл .vtt хадмал оруулна уу.");
@@ -277,6 +285,7 @@ export default function Home() {
     if (!result.ok) { setError(result.error); return; }
     if (!lessonId) setLessonId(crypto.randomUUID());
     setSegments(result.segments);
+    setTranslationMode("auto");
     cancelSegmentEdit();
     setSubtitleName(file.name);
     setMessage(`${result.segments.length} хадмалын мөр амжилттай уншигдлаа.${result.skippedDuplicates ? ` ${result.skippedDuplicates} давхардсан мөр алгасагдлаа.` : ""}`);
@@ -304,6 +313,7 @@ Listen carefully and repeat each sentence.
     videoRef.current?.pause();
     setIsPlaying(false);
     setSegments(result.segments);
+    setTranslationMode("auto");
     cancelSegmentEdit();
     setLessonId(crypto.randomUUID());
     setSubtitleName("demo-lesson.srt");
@@ -326,6 +336,7 @@ Listen carefully and repeat each sentence.
     setVideoName(undefined);
     setSubtitleName(undefined);
     setSegments([]);
+    setTranslationMode("auto");
     setCurrentTime(0);
     setDuration(0);
     restoreTimeRef.current = 0;
@@ -347,6 +358,7 @@ Listen carefully and repeat each sentence.
       videoRef.current?.pause();
       setIsPlaying(false);
       setLessonId(loaded.lesson.id);
+      setTranslationMode("auto");
       setVideoName(loaded.lesson.videoName);
       setSubtitleName(loaded.lesson.subtitleName);
       setSegments(loaded.lesson.segments);
@@ -484,6 +496,7 @@ Listen carefully and repeat each sentence.
         throw new Error("Whisper таньсан яриаг хугацаатай хадмал болгон буцаасангүй.");
       }
       setSegments(data.segments);
+      setTranslationMode("auto");
       cancelSegmentEdit();
       setSubtitleName(videoName?.replace(/\.(mp4|webm)$/i, ".en.vtt"));
       setMessage(`${data.segments.length} англи хадмалын мөрийг ярианаас танилаа. Одоо “Бүгдийг орчуулах” товч дарна уу.`);
@@ -508,6 +521,7 @@ Listen carefully and repeat each sentence.
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            style: translationStyle,
             segments: task.segments.map(({ id, text, translatedText }) => ({
               id,
               text,
@@ -544,7 +558,9 @@ Listen carefully and repeat each sentence.
           return translatedText ? { ...segment, translatedText } : segment;
         }));
       }
-      setMessage(`${missingTranslationCount} дутуу мөрийг ойролцоох контекстээр орчууллаа. Таны өмнөх орчуулгууд хэвээр үлдлээ.`);
+      setMessage(translationStyle === "song"
+        ? `${missingTranslationCount} дутуу дууны мөрийг дүрслэл, утга, давталтыг нь хадгалж орчууллаа. Дуулж тааруулахдаа хэмнэлийг нягтлаарай.`
+        : `${missingTranslationCount} дутуу мөрийг ойролцоох контекстээр орчууллаа. Таны өмнөх орчуулгууд хэвээр үлдлээ.`);
     } catch (translationError) { setError(translationError instanceof Error ? translationError.message : "Орчуулга амжилтгүй боллоо."); }
     finally { setIsTranslating(false); }
   }
@@ -558,11 +574,19 @@ Listen carefully and repeat each sentence.
         <section className="import-card" aria-label="Файл оруулах"><div><span className="upload-kicker">АЛХАМ 1</span><h2>Хичээлийн файлаа оруулна уу</h2><p>Видео: MP4, WebM · Хадмал: SRT, VTT · Таны файл энэ төхөөрөмжөөс гарахгүй.</p></div><div className="import-actions"><button disabled={!isLibraryReady || isTranscribing || isTranslating} onClick={() => videoInputRef.current?.click()} className="import-button">{videoName ? "Видео солих" : "Видео сонгох"}</button><button disabled={!isLibraryReady || isTranscribing || isTranslating} onClick={() => subtitleInputRef.current?.click()} className="import-button secondary">Хадмал оруулах</button><button type="button" disabled={!isLibraryReady} onClick={loadDemoLesson} className="import-button ghost">Демо жишээ</button><button type="button" disabled={!isLibraryReady} onClick={() => setIsLibraryOpen((open) => !open)} className="import-button ghost">Миний сан ({savedLessons.length})</button>{lessonId && <button type="button" onClick={startNewLesson} className="import-button ghost">Шинэ хичээл</button>}<input ref={videoInputRef} onChange={onVideoChange} accept="video/mp4,video/webm,.mp4,.webm" type="file" hidden/><input ref={subtitleInputRef} onChange={onSubtitleChange} accept=".srt,.vtt,text/vtt,application/x-subrip" type="file" hidden/></div></section>
         <div className="lesson-heading"><div><h2>{videoName ?? subtitleName ?? "Хичээлийн файл"}</h2><p>{segments.length ? `${segments.length} хадмалын мөр бэлэн` : "Видео болон хадмал файл оруулна уу"}</p></div><span className="lesson-count">{activeSegmentIndex >= 0 ? `МӨР ${activeSegmentIndex + 1} / ${segments.length}` : duration ? `${formatTimestamp(duration)} НИЙТ` : "БЭЛЭН БИШ"}</span></div>
         <section className="player-card"><div className="video-panel"><div className="video-top"><span className="video-tag"><span>✦</span> ЛОКАЛ ВИДЕО</span><span className="video-duration">{formatTimestamp(duration)}</span></div>{videoUrl ? <div className="video-frame"><video key={lessonId} ref={videoRef} className="local-video" src={videoUrl} onTimeUpdate={syncTime} onLoadedMetadata={() => { const video = videoRef.current; if (!video) return; setDuration(Number.isFinite(video.duration) ? video.duration : 0); if (restoreTimeRef.current > 0 && Number.isFinite(video.duration)) { video.currentTime = Math.min(restoreTimeRef.current, video.duration); restoreTimeRef.current = 0; syncTime(); } }} onError={() => setError("Энэ видео файлыг браузер тоглуулж чадсангүй. MP4 эсвэл WebM өөр хувилбар сонгоно уу.")} onPlay={() => setIsPlaying(true)} onPause={() => { setIsPlaying(false); stopSpeech(); }} onSeeking={() => { syncTime(); stopSpeech(); }} onSeeked={syncTime} onEnded={() => { setIsPlaying(false); stopSpeech(); }} controls />{activeSegment && <div className="video-subtitle" aria-live="polite">{activeSegment.translatedText?.trim() || activeSegment.text}</div>}</div> : <div className="video-art"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><div className="art-sun"/><div className="art-caption">ТАНЫ<br/><span>ХИЧЭЭЛ</span></div></div>}<div className="video-controls"><button className="play-button" onClick={togglePlay} disabled={!videoUrl} aria-label="Тоглуулах">{isPlaying ? "Ⅱ" : "▶"}</button><span className="video-time">{formatTimestamp(currentTime)} <span>/ {formatTimestamp(duration)}</span></span><div className="progress-track"><span style={{ width: duration ? `${(currentTime / duration) * 100}%` : "0%" }}/></div><span className="control-label">ХАДМАЛ</span></div></div>
-          <div className="player-info"><div className="lesson-type"><span className="type-dot"/> ХАДМАЛТАЙ ВИДЕО</div><h3>{activeSegment ? activeSegment.text : "Хичээлээ эхлүүлээрэй"}</h3><p className="lesson-desc">Видео тоглох үед тухайн хугацааны хадмал доорх жагсаалтад тодорно.</p><div className="cue-navigation"><button type="button" disabled={!videoUrl || getAdjacentSegmentIndex(-1) < 0} onClick={() => navigateSegment(-1)}>← Өмнөх мөр</button><button type="button" disabled={!videoUrl || activeSegmentIndex < 0} onClick={() => activeSegment && seekTo(activeSegment)}>Одоогийн мөр</button><button type="button" disabled={!videoUrl || getAdjacentSegmentIndex(1) < 0 || getAdjacentSegmentIndex(1) >= segments.length} onClick={() => navigateSegment(1)}>Дараах мөр →</button></div><div className="divider"/><div className="audio-heading"><div><span className="audio-icon">♫</span><strong>Монгол neural дуу</strong></div><span className="audio-status">{speechStatus === "loading" ? "ДУУ ҮҮСГЭЖ БАЙНА" : speechStatus === "playing" ? "УНШИЖ БАЙНА" : "ҮНЭГҮЙ · ОНЛАЙН"}</span></div><label className="speech-toggle"><input type="checkbox" checked={speechEnabled} disabled={!segments.some((segment) => segment.translatedText?.trim())} onChange={(event) => { setSpeechEnabled(event.target.checked); setSpeechError(undefined); if (!event.target.checked) stopSpeech(); }}/><span>Видео дагаж Монгол дуугаар унших</span></label><label className="voice-select"><span>Дууны өнгө</span><select aria-label="Монгол дуу хоолой" value={speechVoice} onChange={(event) => { const voice = event.target.value; if (isMongolianTtsVoice(voice)) { stopSpeech(); setSpeechVoice(voice); } }}><option value={MONGOLIAN_TTS_VOICES.bataa}>Батаа · эрэгтэй</option><option value={MONGOLIAN_TTS_VOICES.yesui}>Есүй · эмэгтэй</option></select></label><div className="audio-placeholder">{speechError ?? "Ярианы сэтгэл хөдлөлийг тааруулж унших үед эх видеоны дуу түр намсана. Асаахад Монгол орчуулга Microsoft Edge-ийн TTS үйлчилгээнд илгээгдэнэ."}</div><div className="audio-meta"><span>{speechEnabled ? speechStatus === "loading" ? "Дуу бэлдэж байна…" : speechStatus === "playing" ? "Сэтгэл хөдлөлтэй уншиж байна" : "Дуу асаалттай" : "Дуугүй горим"}</span><span>Интернэт шаардлагатай</span></div></div></section>
+          <div className="player-info"><div className="lesson-type"><span className="type-dot"/> ХАДМАЛТАЙ ВИДЕО</div><h3>{activeSegment ? activeSegment.text : "Хичээлээ эхлүүлээрэй"}</h3><p className="lesson-desc">Видео тоглох үед тухайн хугацааны хадмал доорх жагсаалтад тодорно.</p><div className="cue-navigation"><button type="button" disabled={!videoUrl || getAdjacentSegmentIndex(-1) < 0} onClick={() => navigateSegment(-1)}>← Өмнөх мөр</button><button type="button" disabled={!videoUrl || activeSegmentIndex < 0} onClick={() => activeSegment && seekTo(activeSegment)}>Одоогийн мөр</button><button type="button" disabled={!videoUrl || getAdjacentSegmentIndex(1) < 0 || getAdjacentSegmentIndex(1) >= segments.length} onClick={() => navigateSegment(1)}>Дараах мөр →</button></div><div className="divider"/><div className="audio-heading"><div><span className="audio-icon">♫</span><strong>Монгол ярианы TTS</strong></div><span className="audio-status">{speechStatus === "loading" ? "ДУУ ҮҮСГЭЖ БАЙНА" : speechStatus === "playing" ? "УНШИЖ БАЙНА" : "ҮНЭГҮЙ · ОНЛАЙН"}</span></div><label className="speech-toggle"><input type="checkbox" checked={speechEnabled} disabled={!segments.some((segment) => segment.translatedText?.trim())} onChange={(event) => { setSpeechEnabled(event.target.checked); setSpeechError(undefined); if (!event.target.checked) stopSpeech(); }}/><span>Видео дагаж Монгол дуугаар унших</span></label><label className="voice-select"><span>Дууны өнгө</span><select aria-label="Монгол дуу хоолой" value={speechVoice} onChange={(event) => { const voice = event.target.value; if (isMongolianTtsVoice(voice)) { stopSpeech(); setSpeechVoice(voice); } }}><option value={MONGOLIAN_TTS_VOICES.bataa}>Батаа · эрэгтэй</option><option value={MONGOLIAN_TTS_VOICES.yesui}>Есүй · эмэгтэй</option></select></label><div className="audio-placeholder">{speechError ?? "Монгол TTS нь дууг дуурайж дуулахгүй, орчуулгыг сэтгэл хөдлөлтэй яриагаар уншина. Асаахад Монгол орчуулга Microsoft Edge-ийн TTS үйлчилгээнд илгээгдэнэ."}</div><div className="audio-meta"><span>{speechEnabled ? speechStatus === "loading" ? "Дуу бэлдэж байна…" : speechStatus === "playing" ? "Сэтгэл хөдлөлтэй уншиж байна" : "Дуу асаалттай" : "Дуугүй горим"}</span><span>Интернэт шаардлагатай</span></div></div></section>
         <section className="subtitles-section">
           <div className="subtitles-heading">
             <div><h2>Хадмалын мөрүүд</h2><p>Видеоноос яриа таних эсвэл SRT/VTT оруулна. Мөр дээр дарж видеог шилжүүлнэ.</p></div>
             <div className="subtitle-actions">
+              <label className="translation-style"><span>Орчуулгын төрөл</span><select aria-label="Орчуулгын төрөл" value={translationMode} disabled={isTranslating || isTranscribing} onChange={(event) => {
+                const mode = event.target.value;
+                if (mode === "auto" || mode === "song" || mode === "dialogue") setTranslationMode(mode);
+              }}>
+                <option value="auto">Авто ({detectedTranslationStyle === "song" ? "дуу" : "яриа"})</option>
+                <option value="song">Дууны үг</option>
+                <option value="dialogue">Энгийн яриа</option>
+              </select></label>
               <button className="subtitles-action" disabled={!videoFile || isTranscribing || isTranslating} onClick={transcribeVideo}>{isTranscribing ? "Яриа таньж байна…" : "Видео яриаг таних"}</button>
               <button className="subtitles-action translate-button" disabled={!missingTranslationCount || isTranslating || isTranscribing} onClick={translateAll}>{isTranslating ? "Орчуулж байна…" : missingTranslationCount < segments.length ? `Дутуу ${missingTranslationCount} мөрийг орчуулах` : "Бүгдийг орчуулах"}</button>
               <button className="subtitles-action" disabled={!allSegmentsTranslated || isTranscribing} onClick={downloadTranslatedVtt}>VTT татах</button>

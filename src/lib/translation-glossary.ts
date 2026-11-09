@@ -305,6 +305,71 @@ const glossary: GlossaryEntry[] = [
     target: "худлаа шаасан юм",
     context: "худал, утгагүй зүйлийг ууртай бүдүүлэг өнгөөр хэлэхэд",
   },
+  {
+    source: "i follow its silver line",
+    target: "Би түүний мөнгөлөг туяаг дагана",
+    context: "гэрэл, туяаны дүрслэлийг дууны үгэнд утга алдагдуулахгүй буулгах",
+  },
+  {
+    source: "what the hell were you thinking",
+    target: "Чи юу гэж бодсон юм бэ, новш гэж?",
+    context: "хэн нэгний үйлдэлд уурлан зэмлэхэд; бүдүүлэг өнгийг хадгал",
+  },
+  {
+    source: "come on, give me a break",
+    target: "За боль л доо",
+    context: "итгэхэд бэрх зүйл сонсоод дургүйцэхэд; жинхэнэ амралт хүсээгүй бол үгчлэн бүү орчуул",
+  },
+  {
+    source: "give me a break",
+    target: "Боль л доо / Намайг тайван байлгаач",
+    context: "итгэхгүй, залхсан өнгөөр хэлбэл 'Боль л доо'; шахаж зовоож байвал 'Намайг тайван байлгаач'; амралт хүссэн үед л амсхийх тухай орчуул",
+  },
+  {
+    source: "you're killing me",
+    target: "Чи намайг инээлгээд аллаа / Чи намайг бүр залхааж гүйцлээ",
+    context: "инээдтэй зүйлд инээлгэж байгааг; дургүйцсэн үед залхааж байгааг хэлнэ. Нөхцөлөөс сонгож, 'үхэж байна' гэж үгчлэн бүү орчуул",
+  },
+  {
+    source: "are you serious right now",
+    target: "Чи нээрээ юу? / Чи яг үнэнээсээ хэлж байна уу?",
+    context: "итгэхэд бэрх зүйлд гайхах эсвэл нөгөө хүн үнэн хэлж буй эсэхэд эргэлзэхэд",
+  },
+  {
+    source: "i'm done with this",
+    target: "Би үүнээс залхлаа / Би үүнийг дуусгалаа",
+    context: "залхаж цааш тэвчихгүй бол 'Би үүнээс залхлаа'; ажлаа дуусгасан бол 'Би үүнийг дуусгалаа'",
+  },
+  {
+    source: "that was close",
+    target: "Арай л алдсангүй шүү",
+    context: "осол, аюул эсвэл бүтэлгүйтлээс арайхийн мултарсан тухай; тайван байсан гэсэн утга биш",
+  },
+  {
+    source: "i couldn't care less",
+    target: "Надад огт хамаагүй",
+    context: "ямар нэг зүйлд огтхон ч санаа тавихгүй байгаагаа хэлэхэд",
+  },
+  {
+    source: "i could not care less",
+    target: "Надад огт хамаагүй",
+    context: "ямар нэг зүйлд огтхон ч санаа тавихгүй байгаагаа хэлэхэд",
+  },
+  {
+    source: "you have some nerve",
+    target: "Чи ч ёстой ичих нүүргүй юм аа",
+    context: "хэн нэгнийг ичгүүргүй, даварсан үйлдэл хийлээ гэж зэмлэхэд; зоригтой гэж магтаж байгаа биш",
+  },
+  {
+    source: "that's bullshit",
+    target: "Тэр чинь худлаа шаасан юм",
+    context: "хэн нэгний хэлснийг худал, утгагүй гэж бүдүүлэг өнгөөр үгүйсгэхэд",
+  },
+  {
+    source: "[sighs]",
+    target: "[Санаа алдлаа]",
+    context: "санаа алдаж буйг тэмдэглэсэн хадмалын тайлбар",
+  },
 ];
 
 function findPhrase(text: string, phrase: string): number | undefined {
@@ -314,7 +379,7 @@ function findPhrase(text: string, phrase: string): number | undefined {
 }
 
 export function formatRelevantGlossary(texts: readonly string[]): string {
-  const combinedText = texts.join("\n");
+  const combinedText = texts.join(" ").replace(/\s+/g, " ");
   const matches = glossary.flatMap((entry) => {
     const index = findPhrase(combinedText, entry.source);
     return index === undefined ? [] : [{ entry, index, end: index + entry.source.length }];

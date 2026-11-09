@@ -34,12 +34,17 @@ describe("Ollama translation provider", () => {
       think: false,
       format: "json",
       messages: [
-        { role: "system", content: expect.stringContaining("Энгийн харилцан ярианд 'чи' хэлбэрийг хэрэглэ") },
+        { role: "system", content: expect.stringContaining("Англи хэлний үгийн дарааллыг бүү дуурай") },
         { role: "user", content: expect.stringContaining("First line") },
       ],
       options: { temperature: 0.1 },
     });
+    expect(requestBody.messages[0].content).toContain("Cue бүрд зөвхөн тухайн эх мөрийн утгыг өг");
+    expect(requestBody.messages[0].content).toContain("давталтгүй, залгамж холбоотой хуваарил");
+    expect(requestBody.messages[0].content).toContain("'Чи арай' / 'тоглоогүй биз?'");
     expect(requestBody.messages[1].content).toContain("Өмнөх баталсан орчуулга");
+    expect(requestBody.messages[1].content).toContain("бүтэн орчуулгыг нэг cue-д шахаж, бусдад давтаж болохгүй");
+    expect(requestBody.messages[1].content).toContain('"Чи арай" / "тоглоогүй биз?"');
   });
 
   it("preserves profanity and the source tone instead of censoring subtitles", async () => {
@@ -79,6 +84,88 @@ describe("Ollama translation provider", () => {
     expect(userPrompt).toContain("this is bullshit = Энэ чинь худлаа шаасан юм");
     expect(userPrompt).toContain("i don't give a damn = Надад ёстой падгүй.");
     expect(userPrompt).toContain("you have got to be kidding me = Чи тоглоод байгаа юм уу?");
+  });
+
+  it("provides contextual guidance for commonly mistranslated colloquial phrases", async () => {
+    vi.stubEnv("TRANSLATION_PROVIDER", "ollama");
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      message: { content: JSON.stringify({ translations: [
+        { id: "cue-0", translatedText: "Чи намайг инээлгээд аллаа!" },
+        { id: "cue-1", translatedText: "За боль л доо." },
+        { id: "cue-2", translatedText: "Чи нээрээ юу?" },
+        { id: "cue-3", translatedText: "Би үүнээс залхлаа." },
+        { id: "cue-4", translatedText: "Арай л алдсангүй шүү." },
+        { id: "cue-5", translatedText: "Надад огт хамаагүй." },
+        { id: "cue-6", translatedText: "Чи ч ёстой ичих нүүргүй юм аа." },
+        { id: "cue-7", translatedText: "[Санаа алдлаа]" },
+      ] }) },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await translationProvider.translateBatch([
+      { id: "cue-0", text: "You're killing me!" },
+      { id: "cue-1", text: "Come on, give me a break." },
+      { id: "cue-2", text: "Are you serious right now?" },
+      { id: "cue-3", text: "I'm done with this." },
+      { id: "cue-4", text: "That was close." },
+      { id: "cue-5", text: "I couldn't care less." },
+      { id: "cue-6", text: "You have some nerve." },
+      { id: "cue-7", text: "[sighs]" },
+    ]);
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    const userPrompt = requestBody.messages[1].content as string;
+    expect(userPrompt).toContain("you're killing me = Чи намайг инээлгээд аллаа / Чи намайг бүр залхааж гүйцлээ");
+    expect(userPrompt).toContain("come on, give me a break = За боль л доо");
+    expect(userPrompt).toContain("are you serious right now = Чи нээрээ юу? / Чи яг үнэнээсээ хэлж байна уу?");
+    expect(userPrompt).toContain("i'm done with this = Би үүнээс залхлаа / Би үүнийг дуусгалаа");
+    expect(userPrompt).toContain("that was close = Арай л алдсангүй шүү");
+    expect(userPrompt).toContain("i couldn't care less = Надад огт хамаагүй");
+    expect(userPrompt).toContain("you have some nerve = Чи ч ёстой ичих нүүргүй юм аа");
+    expect(userPrompt).toContain("[sighs] = [Санаа алдлаа]");
+  });
+
+  it("matches glossary phrases that continue across subtitle cues", async () => {
+    vi.stubEnv("TRANSLATION_PROVIDER", "ollama");
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      message: { content: JSON.stringify({ translations: [
+        { id: "cue-0", translatedText: "Чи тоглоод байгаа юм уу?" },
+        { id: "cue-1", translatedText: "За боль л доо." },
+      ] }) },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await translationProvider.translateBatch([
+      { id: "cue-0", text: "You have got to be" },
+      { id: "cue-1", text: "kidding me." },
+    ]);
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    const userPrompt = requestBody.messages[1].content as string;
+    expect(userPrompt).toContain("you have got to be kidding me = Чи тоглоод байгаа юм уу?");
+  });
+
+  it("uses lyric-specific meaning and repetition guidance in song mode", async () => {
+    vi.stubEnv("TRANSLATION_PROVIDER", "ollama");
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      message: { content: JSON.stringify({ translations: [
+        { id: "cue-0", translatedText: "Өглөөний гэрэл нам гүм замыг гийгүүлнэ." },
+        { id: "cue-1", translatedText: "Би түүний мөнгөлөг туяаг дагана." },
+      ] }) },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await translationProvider.translateBatch([
+      { id: "cue-0", text: "Morning light fills the quiet road." },
+      { id: "cue-1", text: "I follow its silver line." },
+    ], "song");
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(requestBody.options.temperature).toBe(0.2);
+    expect(requestBody.messages[0].content).toContain("Энэ багц дууны үг");
+    expect(requestBody.messages[0].content).toContain("давталт, дахилтыг эхтэй адил хадгал");
+    expect(requestBody.messages[0].content).toContain("утга, зөв монгол хэл, хараалын хүчийг хэзээ ч золиосолж болохгүй");
+    expect(requestBody.messages[1].content).toContain("i follow its silver line = Би түүний мөнгөлөг туяаг дагана");
   });
 
   it("falls back to the next installed Ollama model when the primary model times out", async () => {

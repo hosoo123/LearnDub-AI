@@ -20,15 +20,23 @@ describe("Mongolian speech emotion", () => {
     ["Би чамайг санаж байна.", "sad"],
     ["Wow, this is amazing!", "excited"],
     ["Ямар гайхалтай вэ!", "excited"],
+    ["I'm done with this.", "frustrated"],
+    ["Би үүнээс бүр залхлаа.", "frustrated"],
+    ["Phew, what a relief.", "relieved"],
+    ["Ашгүй дээ.", "relieved"],
     ["Are you coming?", "curious"],
     ["Good morning.", "neutral"],
   ] as const)("detects %s as %s", (text, emotion) => {
     expect(detectSpeechEmotion(text)).toBe(emotion);
   });
 
-  it("uses gentler prosody for sad dialogue and more energetic prosody for excited dialogue", () => {
-    expect(getSpeechProsody("I'm lonely and sad.")).toEqual({ rate: "-12%", pitch: "-8%" });
-    expect(getSpeechProsody("Wow, this is amazing!")).toEqual({ rate: "+10%", pitch: "+8%" });
+  it("uses both the original and translation to identify emotion and vary voice intensity", () => {
+    expect(detectSpeechEmotion("You're killing me.", "Чи намайг инээлгээд аллаа!")).toBe("happy");
+    expect(detectSpeechEmotion("Neutral source.", "Би үүнээс бүр залхлаа.")).toBe("frustrated");
+    expect(getSpeechProsody("I'm lonely and sad.")).toEqual({ rate: "-12%", pitch: "-8%", volume: "-8%" });
+    expect(getSpeechProsody("Wow, this is amazing!")).toEqual({ rate: "+10%", pitch: "+8%", volume: "+5%" });
+    expect(getSpeechProsody("I'm done with this.")).toEqual({ rate: "+3%", pitch: "-2%", volume: "+2%" });
+    expect(getSpeechProsody("Good morning.")).toEqual({ rate: "default", pitch: "default", volume: "default" });
   });
 });
 
@@ -65,8 +73,10 @@ describe("Mongolian neural TTS provider", () => {
     expect(edgeTtsMock).toHaveBeenCalledWith(expect.objectContaining({
       voice: MONGOLIAN_TTS_VOICES.yesui,
       lang: "mn-MN",
+      outputFormat: "audio-24khz-96kbitrate-mono-mp3",
       rate: "+8%",
       pitch: "-5%",
+      volume: "+8%",
       timeout: 15_000,
     }));
   });

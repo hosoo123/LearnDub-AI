@@ -4,7 +4,7 @@ const edgeTtsMock = vi.hoisted(() => vi.fn());
 vi.mock("node-edge-tts", () => ({ EdgeTTS: edgeTtsMock }));
 
 import { TtsProviderError, ttsProvider } from "../src/lib/providers";
-import { detectSpeechEmotion, getSpeechProsody, MONGOLIAN_TTS_VOICES } from "../src/lib/speech";
+import { detectSpeechEmotion, duckVideoAudio, getSpeechProsody, MONGOLIAN_TTS_VOICES } from "../src/lib/speech";
 
 beforeEach(() => {
   edgeTtsMock.mockImplementation(() => ({
@@ -35,6 +35,27 @@ describe("Mongolian speech emotion", () => {
   it("uses gentler prosody for sad dialogue and more energetic prosody for excited dialogue", () => {
     expect(getSpeechProsody("I'm lonely and sad.")).toEqual({ rate: "-12%", pitch: "-8%" });
     expect(getSpeechProsody("Wow, this is amazing!")).toEqual({ rate: "+10%", pitch: "+8%" });
+  });
+});
+
+describe("video audio ducking", () => {
+  it("lowers the original video audio during speech and restores its previous volume", () => {
+    const video = { muted: false, volume: 0.8 };
+    const restoreVolume = duckVideoAudio(video, 0.12);
+
+    expect(video.volume).toBe(0.12);
+    restoreVolume?.();
+    expect(video.volume).toBe(0.8);
+  });
+
+  it("does not change muted or already quieter video audio", () => {
+    const mutedVideo = { muted: true, volume: 0.8 };
+    expect(duckVideoAudio(mutedVideo, 0.12)).toBeUndefined();
+    expect(mutedVideo.volume).toBe(0.8);
+
+    const quietVideo = { muted: false, volume: 0.05 };
+    duckVideoAudio(quietVideo, 0.12)?.();
+    expect(quietVideo.volume).toBe(0.05);
   });
 });
 

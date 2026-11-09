@@ -6,6 +6,16 @@ export const MONGOLIAN_TTS_VOICES = {
 export type MongolianTtsVoice = (typeof MONGOLIAN_TTS_VOICES)[keyof typeof MONGOLIAN_TTS_VOICES];
 export type SpeechEmotion = "angry" | "curious" | "excited" | "happy" | "neutral" | "sad";
 
+export function duckVideoAudio(
+  video: Pick<HTMLVideoElement, "muted" | "volume">,
+  duckedVolume: number,
+): (() => void) | undefined {
+  if (video.muted) return undefined;
+  const originalVolume = video.volume;
+  video.volume = Math.min(originalVolume, duckedVolume);
+  return () => { video.volume = originalVolume; };
+}
+
 export function isMongolianTtsVoice(value: unknown): value is MongolianTtsVoice {
   return Object.values(MONGOLIAN_TTS_VOICES).some((voice) => voice === value);
 }

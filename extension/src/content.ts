@@ -1,12 +1,13 @@
-import { CapturedCaption, captionsToVtt } from "./captions";
+import { CaptionRecorder } from "./captions";
 
 type CaptureMessage = { type: "LEARNDUB_CAPTURE_START" | "LEARNDUB_CAPTURE_STOP" | "LEARNDUB_CAPTURE_STATUS" };
 
 let video: HTMLVideoElement | null = null;
 let captureTimer: number | undefined;
-let capturedCaptions: CapturedCaption[] = [];
-let activeText = "";
-let lastVideoTime = 0;
+let recorder: CaptionRecorder | undefined;
+let lastCaptureCount = 0;
+let captureError: string | undefined;
+let captureVideoId: string | undefined;
 
 function visibleCaptionText() {
   return Array.from(document.querySelectorAll<HTMLElement>(".ytp-caption-segment"))
@@ -18,31 +19,9 @@ function visibleCaptionText() {
     .trim();
 }
 
-function closeActiveCaption(time: number) {
-  const current = capturedCaptions.at(-1);
-  if (!current || !activeText) return;
-  current.end = Math.max(time, current.start + 0.1);
-  activeText = "";
-}
-
-function sampleCaption() {
-  if (!video) return;
-  const time = video.currentTime;
-  if (time < lastVideoTime) closeActiveCaption(lastVideoTime);
-  lastVideoTime = time;
-
-  const text = visibleCaptionText();
-  if (text === activeText) {
-    const current = capturedCaptions.at(-1);
-    if (current) current.end = Math.max(time, current.start + 0.1);
-    return;
-  }
-
-  closeActiveCaption(time);
-  if (text) {
-    capturedCaptions.push({ start: time, end: time + 0.1, text });
-    activeText = text;
-  }
+function getVideoId() {
+  const url = new URL(window.location.href);
+  return url.searchParams.get("v") ?? url.pathname;
 }
 
 function startCapture() {
@@ -50,25 +29,53 @@ function startCapture() {
   video = document.querySelector<HTMLVideoElement>("video");
   if (!video) return { ok: false, error: "Энэ YouTube хуудсан дээр видео олдсонгүй." };
 
-  capturedCaptions = [];
-  activeText = "";
-  lastVideoTime = video.currentTime;
-  sampleCaption();
-  captureTimer = window.setInterval(sampleCaption, 200);
+  try {
+    recorder = new CaptionRecorder(visibleCaptionText);
+    recorder.start(video.currentTime);
+  } catch (error) {
+    recorder = undefined;
+    video = null;
+    return { ok: false, error: error instanceof Error ? error.message : "Хадмалын бичлэг эхэлсэнгүй." };
+  }
+  captureVideoId = getVideoId();
+  lastCaptureCount = 0;
+  captureError = undefined;
+  captureTimer = window.setInterval(sampleCapture, 200);
   return { ok: true, message: "Хадмал бичиж эхэллээ. YouTube дээр CC асааж видеог тоглуулна уу." };
+}
+
+function sampleCapture() {
+  if (!video?.isConnected || document.querySelector("video") !== video || getVideoId() !== captureVideoId) {
+    if (captureTimer !== undefined) window.clearInterval(captureTimer);
+    captureTimer = undefined;
+    recorder = undefined;
+    video = null;
+    captureVideoId = undefined;
+    lastCaptureCount = 0;
+    captureError = "YouTube видео солигдлоо. Шинэ видеон дээр хадмал бичлэгээ дахин эхлүүлнэ үү.";
+    return;
+  }
+  recorder?.sample(video.currentTime);
 }
 
 function stopCapture() {
   if (captureTimer === undefined) return { ok: false, error: "Эхлээд хадмалын бичлэгийг эхлүүлнэ үү." };
-  sampleCaption();
   window.clearInterval(captureTimer);
   captureTimer = undefined;
-  closeActiveCaption((video?.currentTime ?? lastVideoTime) + 1.5);
-
+  if (!recorder || !video) return { ok: false, error: "Хадмалын бичлэгийн төлөв алдагдсан байна. Дахин эхлүүлнэ үү." };
+  const completedRecorder = recorder;
+  const stopTime = video.currentTime;
+  recorder = undefined;
+  video = null;
   try {
-    return { ok: true, vtt: captionsToVtt(capturedCaptions), count: capturedCaptions.length };
+    const vtt = completedRecorder.stop(stopTime);
+    lastCaptureCount = completedRecorder.count;
+    captureError = undefined;
+    return { ok: true, vtt, count: lastCaptureCount };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "VTT хадмал үүсгэж чадсангүй." };
+    lastCaptureCount = completedRecorder.count;
+    captureError = error instanceof Error ? error.message : "VTT хадмал үүсгэж чадсангүй.";
+    return { ok: false, error: captureError };
   }
 }
 
@@ -85,8 +92,9 @@ chrome.runtime.onMessage.addListener((message: CaptureMessage, _sender, sendResp
     sendResponse({
       ok: true,
       recording: captureTimer !== undefined,
-      count: capturedCaptions.length,
+      count: recorder?.count ?? lastCaptureCount,
       captionsEnabled: document.querySelector(".ytp-subtitles-button[aria-pressed='true']") !== null,
+      ...(captureError ? { error: captureError } : {}),
     });
   }
 });

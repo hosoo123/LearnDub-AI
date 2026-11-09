@@ -2,10 +2,9 @@
   "manifest_version": 3,
   "name": "LearnDub AI",
   "version": "0.1.0",
-  "description": "YouTube дээрх идэвхтэй хадмалыг VTT болгон LearnDub AI-д оруулах extension.",
+  "description": "YouTube дээр хэрэглэгчид харагдаж буй CC хадмалыг VTT болгон хадгалж, LearnDub AI-д оруулна.",
   "action": { "default_popup": "dist/popup.html", "default_title": "LearnDub AI" },
-  "background": { "service_worker": "dist/background.js", "type": "module" },
   "content_scripts": [{ "matches": ["https://www.youtube.com/*"], "js": ["dist/content.js"], "run_at": "document_idle" }],
-  "permissions": ["activeTab", "storage"],
-  "host_permissions": ["http://localhost:3000/*"]
+  "permissions": ["activeTab"],
+  "host_permissions": ["https://www.youtube.com/*", "http://localhost:3000/*"]
 }

@@ -42,3 +42,4 @@ next-env.d.ts
 
 # extension build output
 /extension/dist
+/extension/learndub-ai-chrome.zip

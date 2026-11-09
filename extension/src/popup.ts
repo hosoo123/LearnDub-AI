@@ -7,6 +7,7 @@ type ContentReply = {
   count?: number;
   vtt?: string;
 };
+type CaptureMessageType = "LEARNDUB_CAPTURE_START" | "LEARNDUB_CAPTURE_STOP" | "LEARNDUB_CAPTURE_STATUS";
 
 const statusElement = document.querySelector<HTMLElement>("#status");
 const captureStatusElement = document.querySelector<HTMLElement>("#capture-status");
@@ -22,10 +23,11 @@ async function getYouTubeTab() {
   return tab;
 }
 
-async function sendToYouTube(message: { type: string }) {
+async function sendToYouTube(message: { type: CaptureMessageType }) {
   const tab = await getYouTubeTab();
+  if (tab.id === undefined) throw new Error("YouTube таб олдсонгүй. Дахин нээнэ үү.");
   try {
-    return { tab, reply: await chrome.tabs.sendMessage(tab.id!, message) as ContentReply };
+    return { tab, reply: await chrome.tabs.sendMessage(tab.id, message) as ContentReply };
   } catch {
     throw new Error("YouTube хуудсыг нээсний дараа extension-ээ шинэчилж дахин ачаална уу.");
   }
@@ -49,11 +51,11 @@ async function refreshStatus() {
     if (!reply.ok) throw new Error(reply.error ?? "Хадмалын төлөв уншигдсангүй.");
     setRecordingState(Boolean(reply.recording), reply.count);
     if (statusElement) {
-      statusElement.textContent = reply.recording
+      statusElement.textContent = reply.error ?? (reply.recording
         ? "Видеогоо тоглуулаад дууссаны дараа бичлэгийг зогсооно уу."
         : reply.captionsEnabled
           ? "YouTube CC асаалттай байна. Бичлэг эхлүүлээд видеогоо тоглуулаарай."
-          : "Эхлээд YouTube дээр CC асааж, боломжтой бол English хадмал сонгоно уу.";
+          : "Эхлээд YouTube дээр CC асааж, боломжтой бол English хадмал сонгоно уу.");
     }
   } catch (error) {
     showError(error);
@@ -87,7 +89,7 @@ stopButton?.addEventListener("click", async () => {
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     setRecordingState(false, reply.count);
-    if (statusElement) statusElement.textContent = `${reply.count} хадмал VTT файл болж татагдлаа. LearnDub AI-д оруулж орчуулна уу.`;
+    if (statusElement) statusElement.textContent = `${reply.count} мөртэй хадмал татагдлаа. Веб аппын "Хадмал оруулах" дээр дарж Монгол хэл рүү орчуулаарай.`;
   } catch (error) {
     showError(error);
     await refreshStatus();
@@ -95,7 +97,11 @@ stopButton?.addEventListener("click", async () => {
 });
 
 openAppButton?.addEventListener("click", async () => {
-  await chrome.tabs.create({ url: "http://localhost:3000" });
+  try {
+    await chrome.tabs.create({ url: "http://localhost:3000" });
+  } catch (error) {
+    showError(error);
+  }
 });
 
 void refreshStatus();

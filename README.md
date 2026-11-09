@@ -12,7 +12,7 @@
 
 ## Windows дээр эхлүүлэх
 
-Шаардлагатай: Node.js-ийн одоогийн LTS хувилбар, npm, Ollama. Видео яриа танихад FFmpeg болон FFprobe хэрэгтэй.
+Шаардлагатай: Node.js 22.12 ба түүнээс шинэ хувилбар (одоогийн LTS санал болгоно), npm, Ollama. Видео яриа танихад FFmpeg болон FFprobe хэрэгтэй.
 
 ```powershell
 ollama pull gemma4:e4b

@@ -1,22 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-const edgeTtsMock = vi.hoisted(() => vi.fn());
+const edgeTtsMock = vi.hoisted(() => vi.fn(class {
+  async *streamAudio() {
+    yield Buffer.from("mock-mp3");
+  }
+}));
 vi.mock("node-edge-tts", () => ({ EdgeTTS: edgeTtsMock }));
 
 import { TtsProviderError, ttsProvider } from "../src/lib/providers";
 import { detectSpeechEmotion, duckVideoAudio, getSpeechProsody, MONGOLIAN_TTS_VOICES } from "../src/lib/speech";
 
-beforeEach(() => {
-  edgeTtsMock.mockImplementation(() => ({
-    async *streamAudio() {
-      yield Buffer.from("mock-mp3");
-    },
-  }));
-});
-
-afterEach(() => {
-  edgeTtsMock.mockReset();
-});
+afterEach(() => edgeTtsMock.mockReset());
 
 describe("Mongolian speech emotion", () => {
   it.each([
@@ -78,11 +72,11 @@ describe("Mongolian neural TTS provider", () => {
   });
 
   it("reports remote synthesis errors instead of returning an empty audio result", async () => {
-    edgeTtsMock.mockImplementation(() => ({
+    edgeTtsMock.mockImplementation(class {
       async *streamAudio() {
         throw new Error("service unavailable");
-      },
-    }));
+      }
+    });
     await expect(ttsProvider.synthesize("Сайн уу?")).rejects.toBeInstanceOf(TtsProviderError);
   });
 });

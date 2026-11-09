@@ -1,7 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { CaptionRecorder, captionsToVtt } from "../extension/src/captions";
+import { CaptionRecorder, captionsToVtt, getYouTubeVideoId } from "../extension/src/captions";
 
 describe("YouTube caption export", () => {
+  it.each([
+    ["https://www.youtube.com/watch?v=video123", "video123"],
+    ["https://www.youtube.com/shorts/short123", "short123"],
+    ["https://www.youtube.com/live/live123?feature=share", "live123"],
+    ["https://www.youtube.com/embed/embed123", "embed123"],
+  ])("recognizes supported video URL %s", (href, videoId) => {
+    expect(getYouTubeVideoId(href)).toBe(videoId);
+  });
+
+  it.each([
+    "https://www.youtube.com/",
+    "https://www.youtube.com/results?search_query=learn",
+    "https://m.youtube.com/watch?v=video123",
+    "http://www.youtube.com/watch?v=video123",
+    "not-a-url",
+  ])("does not capture non-video or unsupported URL %s", (href) => {
+    expect(getYouTubeVideoId(href)).toBeUndefined();
+  });
+
   it("creates VTT cues with millisecond timing and escaped markup", () => {
     expect(captionsToVtt([
       { start: 1.25, end: 2.5, text: "Hello <world> & friends" },

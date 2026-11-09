@@ -4,6 +4,21 @@ export type CapturedCaption = {
   text: string;
 };
 
+export function getYouTubeVideoId(href: string) {
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return undefined;
+  }
+
+  if (url.protocol !== "https:" || url.hostname !== "www.youtube.com") return undefined;
+  const watchId = url.pathname === "/watch" ? url.searchParams.get("v") : undefined;
+  const pathId = /^\/(?:shorts|live|embed)\/([^/]+)/.exec(url.pathname)?.[1];
+  const videoId = watchId ?? pathId;
+  return videoId?.trim() || undefined;
+}
+
 export class CaptionRecorder {
   private readonly readCaption: () => string;
   private captions: CapturedCaption[] = [];
@@ -83,14 +98,14 @@ export function captionsToVtt(captions: readonly CapturedCaption[]) {
   const cues = [...captions]
     .sort((left, right) => left.start - right.start || left.end - right.end)
     .map(({ start, end, text }, index) => {
-    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || !text.trim()) {
-      throw new Error("YouTube хадмалын хугацаа эсвэл текст буруу байна.");
-    }
-    const safeText = text.trim()
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-    return `${index + 1}\n${formatTimestamp(start)} --> ${formatTimestamp(end)}\n${safeText}`;
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || !text.trim()) {
+        throw new Error("YouTube хадмалын хугацаа эсвэл текст буруу байна.");
+      }
+      const safeText = text.trim()
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      return `${index + 1}\n${formatTimestamp(start)} --> ${formatTimestamp(end)}\n${safeText}`;
     });
 
   return `WEBVTT\n\n${cues.join("\n\n")}\n`;

@@ -87,7 +87,7 @@ export function applySubtitleEdit(segment: SubtitleSegment, draft: SubtitleEditD
   if (text.length > MAX_SUBTITLE_TEXT_LENGTH || translatedText.length > MAX_SUBTITLE_TEXT_LENGTH) {
     return { ok: false, error: "Хадмалын нэг мөр 3000 тэмдэгтээс хэтэрч болохгүй." };
   }
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) {
+  if (!draft.start.trim() || !draft.end.trim() || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) {
     return { ok: false, error: "Хадмалын эхлэх/дуусах хугацаа зөв биш байна. Дуусах хугацаа эхлэхээс хойш байх ёстой." };
   }
 
@@ -105,14 +105,23 @@ export function applySubtitleEdit(segment: SubtitleSegment, draft: SubtitleEditD
   };
 }
 
-const TIME_RANGE = /^(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s+-->\s+(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})(?:\s+.*)?$/;
+const TIME_RANGE = /^(?:(\d{2,}):)?(\d{2}):(\d{2})[,.](\d{1,3})\s+-->\s+(?:(\d{2,}):)?(\d{2}):(\d{2})[,.](\d{1,3})(?:\s+.*)?$/;
 
-function toSeconds(hours: string, minutes: string, seconds: string, milliseconds: string) {
-  return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds) + Number(milliseconds.padEnd(3, "0")) / 1000;
+function toSeconds(hours: string | undefined, minutes: string, seconds: string, milliseconds: string) {
+  if (Number(minutes) > 59 || Number(seconds) > 59) return NaN;
+  return Number(hours ?? 0) * 3600 + Number(minutes) * 60 + Number(seconds) + Number(milliseconds.padEnd(3, "0")) / 1000;
 }
 
 function stripMarkup(value: string) {
-  return value.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  const entities: Record<string, string> = { amp: "&", lt: "<", gt: ">", nbsp: " ", quot: '"', apos: "'", lrm: "\u200e", rlm: "\u200f" };
+  return value.replace(/<[^>]*>/g, "")
+    .replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (entity, name: string) => {
+      if (!name.startsWith("#")) return entities[name] ?? entity;
+      const codePoint = /^#x/i.test(name) ? parseInt(name.slice(2), 16) : Number(name.slice(1));
+      return codePoint > 0 && codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+        ? String.fromCodePoint(codePoint) : entity;
+    })
+    .replace(/\s+/g, " ").trim();
 }
 
 export function parseSubtitle(content: string, filename: string): ParseSubtitleResult {
@@ -122,16 +131,20 @@ export function parseSubtitle(content: string, filename: string): ParseSubtitleR
 
   const normalized = content.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
   const lines = normalized.split("\n");
-  if (extension === "vtt" && !lines[0]?.trim().startsWith("WEBVTT")) return { ok: false, error: "VTT файл WEBVTT толгой мөргүй байна." };
+  if (extension === "vtt" && !/^WEBVTT(?:[ \t].*)?$/.test(lines[0]?.trim() ?? "")) return { ok: false, error: "VTT файл WEBVTT толгой мөргүй байна." };
 
   const segments: SubtitleSegment[] = [];
   const seen = new Set<string>();
   let skippedDuplicates = 0;
   let cueIndex = 0;
 
-  for (let index = 0; index < lines.length;) {
+  for (let index = extension === "vtt" ? 1 : 0; index < lines.length;) {
     const line = lines[index].trim();
-    if (!line || line === "WEBVTT" || line.startsWith("NOTE") || line.startsWith("STYLE") || line.startsWith("REGION")) { index += 1; continue; }
+    if (extension === "vtt" && /^(?:NOTE(?:[ \t].*)?|STYLE|REGION)$/.test(line)) {
+      while (index < lines.length && lines[index].trim()) index += 1;
+      continue;
+    }
+    if (!line) { index += 1; continue; }
     if (/^\d+$/.test(line)) { index += 1; continue; }
 
     const match = line.match(TIME_RANGE);
@@ -143,7 +156,7 @@ export function parseSubtitle(content: string, filename: string): ParseSubtitleR
     while (index < lines.length && lines[index].trim()) textLines.push(lines[index++]);
     const text = stripMarkup(textLines.join(" "));
 
-    if (!text || end <= start) continue;
+    if (!text || !Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
     if (text.length > MAX_SUBTITLE_TEXT_LENGTH) return { ok: false, error: "Нэг хадмалын мөр хэт урт байна." };
     const duplicateKey = `${start.toFixed(3)}-${end.toFixed(3)}-${text.toLowerCase()}`;
     if (seen.has(duplicateKey)) { skippedDuplicates += 1; continue; }
@@ -152,6 +165,7 @@ export function parseSubtitle(content: string, filename: string): ParseSubtitleR
   }
 
   if (!segments.length) return { ok: false, error: "Унших боломжтой хугацаа болон тексттэй хадмал олдсонгүй." };
+  segments.sort((first, second) => first.start - second.start || first.end - second.end);
   return { ok: true, segments, skippedDuplicates };
 }
 

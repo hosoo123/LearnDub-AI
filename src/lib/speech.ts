@@ -59,3 +59,23 @@ export function getSpeechProsody(text: string, translatedText = ""): SpeechProso
     default: return { rate: "default", pitch: "default", volume: "default" };
   }
 }
+
+export function getExpressiveSpeechProsody(text: string, translatedText = ""): SpeechProsody {
+  const emotion = detectSpeechEmotion(text, translatedText);
+  const profiles: Record<SpeechEmotion, SpeechProsody> = {
+    angry: { rate: "+18%", pitch: "-7%", volume: "+25%" },
+    excited: { rate: "+22%", pitch: "+10%", volume: "+22%" },
+    frustrated: { rate: "+12%", pitch: "-4%", volume: "+16%" },
+    happy: { rate: "+12%", pitch: "+6%", volume: "+12%" },
+    curious: { rate: "+5%", pitch: "+5%", volume: "+8%" },
+    relieved: { rate: "-5%", pitch: "+2%", volume: "+5%" },
+    sad: { rate: "-14%", pitch: "-9%", volume: "-5%" },
+    neutral: { rate: "+5%", pitch: "default", volume: "+6%" },
+  };
+  const profile = profiles[emotion];
+  // Exclamations add energy, without making sad dialogue sound cheerful.
+  if (emotion === "neutral" && /!|！/.test(`${text}${translatedText}`)) {
+    return { rate: "+14%", pitch: "+4%", volume: "+18%" };
+  }
+  return profile;
+}

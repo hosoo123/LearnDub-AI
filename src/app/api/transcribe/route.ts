@@ -5,6 +5,10 @@ export const maxDuration = 1800;
 
 export async function POST(request: Request) {
   try {
+    const quality = request.headers.get("x-transcription-quality") ?? "fast";
+    if (quality !== "fast" && quality !== "accurate") {
+      return Response.json({ error: "Яриа таних горим fast эсвэл accurate байх ёстой." }, { status: 400 });
+    }
     const filename = decodeURIComponent(request.headers.get("x-file-name") ?? "");
     if (!filename) return Response.json({ error: "Видео файлын нэр дамжуулаагүй байна." }, { status: 400 });
     const contentLength = Number(request.headers.get("content-length"));
@@ -13,7 +17,7 @@ export async function POST(request: Request) {
     }
     const video = await request.blob();
     const file = new File([video], filename, { type: video.type });
-    const segments = await transcribeVideo(file);
+    const segments = await transcribeVideo(file, quality);
     return Response.json({ status: "ready", segments });
   } catch (error) {
     if (error instanceof TranscriptionError) {

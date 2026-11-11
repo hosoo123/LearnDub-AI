@@ -1,13 +1,13 @@
 import { formatRelevantGlossary } from "./translation-glossary";
 import { EdgeTTS } from "node-edge-tts";
-import { getSpeechProsody, MONGOLIAN_TTS_VOICES, type MongolianTtsVoice } from "./speech";
+import { getSpeechProsody, getExpressiveSpeechProsody, MONGOLIAN_TTS_VOICES, type MongolianTtsVoice } from "./speech";
 import type { TranslationStyle } from "./translation-style";
 
 export type TranslationResult = { status: "demo" | "ready"; translatedText?: string; message: string };
 export type TranslationSegment = { id: string; text: string; contextTranslation?: string };
 export type TranslatedSegment = { id: string; translatedText: string };
 export type TtsResult = { status: "not-configured" | "ready"; audioUrl?: string; message: string };
-export type TtsOptions = { voice?: MongolianTtsVoice; sourceText?: string };
+export type TtsOptions = { voice?: MongolianTtsVoice; sourceText?: string; expressive?: boolean };
 
 export interface TranslationProvider {
   translate(text: string, style?: TranslationStyle): Promise<TranslationResult>;
@@ -41,7 +41,7 @@ async function translateBatchWithOllama(segments: TranslationSegment[], style: T
     : "";
   const styleInstructions = style === "song"
     ? " Энэ багц дууны үг: дууны мөрийн дүрслэл, далд санаа, сэтгэл хөдлөлийг хадгалж, монгол хэлэнд уянгалаг, эвлэг сонсогдохоор чөлөөтэй буулга. Бадгийн давталт, дахилтыг эхтэй адил хадгал; мөр хооронд үг, өгүүлбэрийг давтахгүй, нийлүүлэхгүй. Боломжтой үед байгалийн rhyme/хэмнэлийг хадгалж болно, гэхдээ утга, зөв монгол хэл, хараалын хүчийг хэзээ ч золиосолж болохгүй; эхэд байхгүй rhyme, санаа бүү зохио. Энэ нь дууны үгийг ярианы бус хэллэгээр орчуулах хүсэлт болохоос утгыг өөрчлөх шалтгаан биш."
-    : "";
+    : " Ярианы дубляжид зориулж орчуул: утга, санаа, нэр томьёог бүрэн хадгалан, Монгол хүн амьд ярианд хэлэхээр товч, эвлэг хэл. Албаны бичгийн болон хэт тайлбарласан өгүүлбэр бүү хэрэглэ. Эхийн эргэлзээ, егөөдөл, баяр, уур, гуниг, асуулт, тушаалын өнгийг цэг тэмдэг болон байгалийн монгол хэллэгээр хадгал; эхэд байхгүй сэтгэл хөдлөл, хашхиралт бүү нэм. Зөвхөн богиносгохын тулд үгүйсгэл, тоо, нөхцөл, эзэн бие, чухал баримтыг бүү хас.";
 
   const models = getOllamaModels();
   const primaryModel = models[0];
@@ -198,8 +198,8 @@ export const translationProvider: TranslationProvider = {
 };
 
 export const ttsProvider: TtsProvider = {
-  async synthesize(text, { voice = MONGOLIAN_TTS_VOICES.bataa, sourceText = text } = {}) {
-    const prosody = getSpeechProsody(sourceText, text);
+  async synthesize(text, { voice = MONGOLIAN_TTS_VOICES.bataa, sourceText = text, expressive = false } = {}) {
+    const prosody = expressive ? getExpressiveSpeechProsody(sourceText, text) : getSpeechProsody(sourceText, text);
     const provider = new EdgeTTS({
       voice,
       lang: "mn-MN",

@@ -8,7 +8,6 @@ export const MAX_TRANSCRIPTION_VIDEO_BYTES = 250 * 1024 * 1024;
 const MAX_DURATION_SECONDS = 30 * 60;
 const SAMPLE_RATE = 16_000;
 const MAX_AUDIO_BYTES = MAX_DURATION_SECONDS * SAMPLE_RATE * 4;
-const MODEL_ID = process.env.WHISPER_MODEL || "onnx-community/whisper-tiny.en";
 const MODEL_CACHE_DIR = path.join(os.homedir(), ".cache", "learndub-ai", "whisper");
 
 type WhisperChunk = { text: string; timestamp: [number | null, number | null] };
@@ -64,15 +63,19 @@ function runProcess(command: string, args: string[], timeoutMs: number, processN
 
 export function chunksToSubtitleSegments(chunks: WhisperChunk[]): SubtitleSegment[] {
   let index = 0;
+  const seen = new Set<string>();
   return chunks.flatMap(({ text, timestamp }) => {
     const normalizedText = text.replace(/\s+/g, " ").trim();
     const [start, end] = timestamp;
-    if (!normalizedText || start === null || end === null || !Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+    if (!normalizedText || start === null || end === null || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return [];
+    const key = `${start}-${end}-${normalizedText}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
     return [{ id: `cue-${index++}`, start, end, text: normalizedText }];
-  });
+  }).sort((a, b) => a.start - b.start || a.end - b.end);
 }
 
-export async function transcribeVideo(file: File): Promise<SubtitleSegment[]> {
+export async function transcribeVideo(file: File, quality: "fast" | "accurate" = "fast"): Promise<SubtitleSegment[]> {
   if (!file.size) throw new TranscriptionError("Видео файл хоосон байна.");
   if (file.size > MAX_TRANSCRIPTION_VIDEO_BYTES) throw new TranscriptionError("Яриа таних видео 250 MB-аас бага байх ёстой.");
   if (!/\.(mp4|webm)$/i.test(file.name)) throw new TranscriptionError("Яриа танихад зөвхөн MP4 эсвэл WebM видео дэмжинэ.");
@@ -116,7 +119,8 @@ export async function transcribeVideo(file: File): Promise<SubtitleSegment[]> {
     const workerOutput = await runProcess(process.execPath, [
       workerPath,
       audioPath,
-      MODEL_ID,
+      quality === "accurate" ? (process.env.WHISPER_ACCURATE_MODEL || "onnx-community/whisper-base.en")
+        : (process.env.WHISPER_MODEL || "onnx-community/whisper-tiny.en"),
       MODEL_CACHE_DIR,
     ], 25 * 60_000, "Whisper");
     const segments = chunksToSubtitleSegments(parseWhisperChunks(workerOutput));

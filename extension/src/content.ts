@@ -1,6 +1,14 @@
 import { CaptionRecorder, getYouTubeVideoId } from "./captions";
+import { LiveTranslation } from "./live-translation";
+import { VideoCaptions } from "./video-captions";
 
-type CaptureMessage = { type: "LEARNDUB_CAPTURE_START" | "LEARNDUB_CAPTURE_STOP" | "LEARNDUB_CAPTURE_STATUS" };
+type CaptureMessage = { type: "LEARNDUB_CAPTURE_START" | "LEARNDUB_CAPTURE_STOP" | "LEARNDUB_CAPTURE_STATUS" | "LEARNDUB_TRANSLATION_TOGGLE" | "LEARNDUB_SPEECH_TOGGLE" | "LEARNDUB_VIDEO_CAPTIONS" | "LEARNDUB_SETTINGS" | "LEARNDUB_RETRY"; videoId?: string; cues?: unknown; sync?: boolean; speechGain?: number; originalMix?: number };
+const videoCaptions = new VideoCaptions();
+const liveTranslation = new LiveTranslation(() => videoCaptions.hasFor(getVideoId())
+  ? videoCaptions.read(getVideoId(), document.querySelector<HTMLVideoElement>("video")?.currentTime ?? 0)
+  : visibleCaptionText(), getVideoId,
+  () => videoCaptions.endAt(getVideoId(), document.querySelector<HTMLVideoElement>("video")?.currentTime ?? 0),
+  () => videoCaptions.upcoming(getVideoId(), document.querySelector<HTMLVideoElement>("video")?.currentTime ?? 0));
 
 let video: HTMLVideoElement | null = null;
 let captureTimer: number | undefined;
@@ -81,6 +89,45 @@ function stopCapture() {
 }
 
 chrome.runtime.onMessage.addListener((message: CaptureMessage, _sender, sendResponse) => {
+  if (message.type === "LEARNDUB_RETRY") {
+    liveTranslation.retry();
+    sendResponse({ ok: true }); return;
+  }
+  if (message.type === "LEARNDUB_SETTINGS") {
+    if (typeof message.sync !== "boolean" || typeof message.speechGain !== "number" || !Number.isFinite(message.speechGain)
+      || message.speechGain < 0.25 || message.speechGain > 2 || typeof message.originalMix !== "number"
+      || !Number.isFinite(message.originalMix) || message.originalMix < 0 || message.originalMix > 1) {
+      sendResponse({ ok: false, error: "Дууны тохиргоо буруу байна." }); return;
+    }
+    liveTranslation.syncGate.enabled = message.sync;
+    if (!message.sync) liveTranslation.syncGate.reset();
+    liveTranslation.speech.setMix(message.speechGain, message.originalMix);
+    sendResponse({ ok: true }); return;
+  }
+  if (message.type === "LEARNDUB_VIDEO_CAPTIONS") {
+    try {
+      const videoId = getVideoId();
+      if (!videoId || videoId !== message.videoId) throw new Error("Видео солигдсон байна. Зөв видеогоо нээгээд дахин оруулна уу.");
+      const count = videoCaptions.load(videoId, message.cues);
+      // Reset context/cache before using a different transcript.
+      if (liveTranslation.enabled) liveTranslation.toggle();
+      liveTranslation.toggle();
+      sendResponse({ ok: true, count });
+    } catch (error) {
+      sendResponse({ ok: false, error: error instanceof Error ? error.message : "Хадмал ачаалсангүй." });
+    }
+    return;
+  }
+  if (message.type === "LEARNDUB_SPEECH_TOGGLE") {
+    if (!liveTranslation.enabled) { sendResponse({ ok: false, error: "Эхлээд Монгол хадмал асаана уу." }); return; }
+    sendResponse({ ok: true, speechEnabled: liveTranslation.speech.toggle() });
+    return;
+  }
+  if (message.type === "LEARNDUB_TRANSLATION_TOGGLE") {
+    if (!getVideoId()) { sendResponse({ ok: false, error: "YouTube видео нээнэ үү." }); return; }
+    sendResponse({ ok: true, translating: liveTranslation.toggle() });
+    return;
+  }
   if (message.type === "LEARNDUB_CAPTURE_START") {
     sendResponse(startCapture());
     return;
@@ -92,10 +139,26 @@ chrome.runtime.onMessage.addListener((message: CaptureMessage, _sender, sendResp
   if (message.type === "LEARNDUB_CAPTURE_STATUS") {
     sendResponse({
       ok: true,
+      translating: liveTranslation.enabled,
+      translationError: liveTranslation.error,
+      speechEnabled: liveTranslation.speech.enabled,
+      speechError: liveTranslation.speech.error,
+      syncEnabled: liveTranslation.syncGate.enabled,
+      syncWaiting: liveTranslation.syncGate.waiting,
+      speechGain: liveTranslation.speech.speechGain,
+      originalMix: liveTranslation.speech.originalMix,
       recording: captureTimer !== undefined,
       count: recorder?.count ?? lastCaptureCount,
       captionsEnabled: document.querySelector(".ytp-subtitles-button[aria-pressed='true']") !== null,
       ...(captureError ? { error: captureError } : {}),
     });
   }
+});
+
+window.addEventListener("pagehide", () => {
+  liveTranslation.dispose();
+  if (captureTimer !== undefined) window.clearInterval(captureTimer);
+  captureTimer = undefined;
+  recorder = undefined;
+  video = null;
 });

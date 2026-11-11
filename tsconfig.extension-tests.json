@@ -1,0 +1,14 @@
+{
+  "extends": "./extension/tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "chrome"],
+    "esModuleInterop": true
+  },
+  "include": [
+    "extension/src/**/*.ts",
+    "tests/extension-*.test.ts",
+    "tests/live-*.test.ts",
+    "tests/pending-requests.test.ts",
+    "tests/sync-gate.test.ts"
+  ]
+}

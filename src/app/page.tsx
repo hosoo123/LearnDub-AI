@@ -33,6 +33,7 @@ export default function Home() {
   const speechVideoVolumeRef = useRef<{ video: HTMLVideoElement; restore: () => void } | undefined>(undefined);
   const restoreTimeRef = useRef(0);
   const lastProgressSavedAtRef = useRef(0);
+  const processingControllerRef = useRef<AbortController | undefined>(undefined);
   const [videoFile, setVideoFile] = useState<File>();
   const [videoUrl, setVideoUrl] = useState<string>();
   const [videoName, setVideoName] = useState<string>();
@@ -82,6 +83,7 @@ export default function Home() {
   }, [restoreSpeechVideoVolume]);
 
   useEffect(() => () => { if (videoUrl) URL.revokeObjectURL(videoUrl); }, [videoUrl]);
+  useEffect(() => () => processingControllerRef.current?.abort(), []);
   const activeSegment = useMemo(() => segments.find((segment) => currentTime >= segment.start && currentTime < segment.end), [segments, currentTime]);
   const activeSegmentIndex = activeSegment ? segments.findIndex((segment) => segment.id === activeSegment.id) : -1;
 
@@ -251,6 +253,8 @@ export default function Home() {
     setError(undefined);
     if (!/\.(mp4|webm)$/i.test(file.name)) { setError("Зөвхөн .mp4 эсвэл .webm видео файл сонгоно уу."); return; }
     if (file.size > MAX_VIDEO_FILE_BYTES) { setError("Видео файл 250 MB-аас ихгүй байх ёстой."); return; }
+    processingControllerRef.current?.abort();
+    stopSpeech();
     const id = crypto.randomUUID();
     setLessonId(id);
     restoreTimeRef.current = 0;
@@ -283,6 +287,7 @@ export default function Home() {
       return;
     }
     if (!result.ok) { setError(result.error); return; }
+    processingControllerRef.current?.abort();
     if (!lessonId) setLessonId(crypto.randomUUID());
     setSegments(result.segments);
     setTranslationMode("auto");
@@ -292,6 +297,7 @@ export default function Home() {
   }
 
   async function loadDemoLesson() {
+    processingControllerRef.current?.abort();
     const demoSubtitle = `1
 00:00:01,000 --> 00:00:04,000
 Welcome to the lesson.
@@ -327,6 +333,7 @@ Listen carefully and repeat each sentence.
   }
 
   function startNewLesson() {
+    processingControllerRef.current?.abort();
     stopSpeech();
     videoRef.current?.pause();
     setIsPlaying(false);
@@ -354,11 +361,13 @@ Listen carefully and repeat each sentence.
     try {
       const loaded = await loadSavedLesson(id);
       if (!loaded) throw new Error("Сонгосон хичээл локал санд олдсонгүй.");
+      processingControllerRef.current?.abort();
       stopSpeech();
       videoRef.current?.pause();
       setIsPlaying(false);
       setLessonId(loaded.lesson.id);
       setTranslationMode("auto");
+      cancelSegmentEdit();
       setVideoName(loaded.lesson.videoName);
       setSubtitleName(loaded.lesson.subtitleName);
       setSegments(loaded.lesson.segments);
@@ -457,19 +466,34 @@ Listen carefully and repeat each sentence.
   }
   function saveSegmentEdit(event: FormEvent<HTMLFormElement>, segment: SubtitleSegment) {
     event.preventDefault();
+    if (isTranslating || isTranscribing) return;
     if (!segmentDraft) return;
     const result = applySubtitleEdit(segment, segmentDraft);
     if (!result.ok) { setError(result.error); return; }
-    setSegments((current) => current.map((item) => item.id === segment.id ? result.segment : item));
+    stopSpeech();
+    setSegments((current) => current.map((item) => item.id === segment.id ? result.segment : item)
+      .sort((first, second) => first.start - second.start || first.end - second.end));
     setError(undefined);
     setMessage(result.sourceChanged
       ? "Эх хадмал засагдлаа. Өөрчлөгдсөн мөрийн орчуулгыг дахин хийнэ үү."
       : "Хадмалын засвар хадгалагдлаа.");
     cancelSegmentEdit();
   }
-  async function togglePlay() { if (!videoRef.current) return; if (videoRef.current.paused) await videoRef.current.play(); else videoRef.current.pause(); }
+  async function togglePlay() {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      if (video.paused) await video.play();
+      else video.pause();
+    } catch (playError) {
+      if (playError instanceof DOMException && playError.name === "AbortError") return;
+      setError("Видеог тоглуулж чадсангүй. Файлын формат болон браузерийн дэмжлэгийг шалгана уу.");
+    }
+  }
   async function transcribeVideo() {
-    if (!videoFile || isTranscribing) return;
+    if (!videoFile || isTranscribing || isTranslating) return;
+    const controller = new AbortController();
+    processingControllerRef.current = controller;
     setIsTranscribing(true);
     setError(undefined);
     setMessage("Видеоноос аудио гаргаж, Whisper загвараар яриаг таньж байна. Анх удаа Whisper загварыг татаж магадгүй.");
@@ -481,17 +505,20 @@ Listen carefully and repeat each sentence.
           "X-File-Name": encodeURIComponent(videoFile.name),
         },
         body: videoFile,
+        signal: controller.signal,
       });
       const data = await response.json() as {
         segments?: SubtitleSegment[];
         error?: string;
       };
+      controller.signal.throwIfAborted();
       if (!response.ok) throw new Error(data.error ?? "Видеоны яриаг таньж чадсангүй.");
       if (!Array.isArray(data.segments) || !data.segments.length
-        || data.segments.some((segment) => typeof segment.id !== "string"
+        || data.segments.some((segment) => !segment || typeof segment.id !== "string"
           || typeof segment.text !== "string"
           || typeof segment.start !== "number"
           || typeof segment.end !== "number"
+          || !Number.isFinite(segment.start) || !Number.isFinite(segment.end) || segment.start < 0
           || segment.end <= segment.start)) {
         throw new Error("Whisper таньсан яриаг хугацаатай хадмал болгон буцаасангүй.");
       }
@@ -501,6 +528,7 @@ Listen carefully and repeat each sentence.
       setSubtitleName(videoName?.replace(/\.(mp4|webm)$/i, ".en.vtt"));
       setMessage(`${data.segments.length} англи хадмалын мөрийг ярианаас танилаа. Одоо “Бүгдийг орчуулах” товч дарна уу.`);
     } catch (transcriptionError) {
+      if (controller.signal.aborted) return;
       setError(transcriptionError instanceof Error ? transcriptionError.message : "Яриа танихад алдаа гарлаа.");
     } finally {
       setIsTranscribing(false);
@@ -508,7 +536,9 @@ Listen carefully and repeat each sentence.
   }
 
   async function translateAll() {
-    if (!missingTranslationCount || isTranslating) return;
+    if (!missingTranslationCount || isTranslating || isTranscribing) return;
+    const controller = new AbortController();
+    processingControllerRef.current = controller;
     setIsTranslating(true); setError(undefined);
     try {
       const tasks = buildMissingTranslationTasks(segments, TRANSLATION_BATCH_SIZE);
@@ -518,6 +548,7 @@ Listen carefully and repeat each sentence.
         const batchIds = new Set(task.segments.map(({ id }) => id));
         setMessage(`Ойролцоох мөрүүдийн контекстээр дутууг орчуулж байна… ${completed}/${missingTranslationCount}`);
         const response = await fetch("/api/translate", {
+          signal: controller.signal,
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -534,6 +565,7 @@ Listen carefully and repeat each sentence.
           message?: string;
           error?: string;
         };
+        controller.signal.throwIfAborted();
         if (!response.ok) throw new Error(data.error ?? "Орчуулгын хүсэлт амжилтгүй боллоо.");
         if (!Array.isArray(data.translatedSegments) || data.translatedSegments.length !== task.segments.length) {
           throw new Error("Орчуулгын үйлчилгээ хадмалын мөр бүрд зөв хариу өгсөнгүй.");
@@ -561,7 +593,9 @@ Listen carefully and repeat each sentence.
       setMessage(translationStyle === "song"
         ? `${missingTranslationCount} дутуу дууны мөрийг дүрслэл, утга, давталтыг нь хадгалж орчууллаа. Дуулж тааруулахдаа хэмнэлийг нягтлаарай.`
         : `${missingTranslationCount} дутуу мөрийг ойролцоох контекстээр орчууллаа. Таны өмнөх орчуулгууд хэвээр үлдлээ.`);
-    } catch (translationError) { setError(translationError instanceof Error ? translationError.message : "Орчуулга амжилтгүй боллоо."); }
+    } catch (translationError) {
+      if (!controller.signal.aborted) setError(translationError instanceof Error ? translationError.message : "Орчуулга амжилтгүй боллоо.");
+    }
     finally { setIsTranslating(false); }
   }
 

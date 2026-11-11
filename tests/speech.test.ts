@@ -8,11 +8,16 @@ const edgeTtsMock = vi.hoisted(() => vi.fn(class {
 vi.mock("node-edge-tts", () => ({ EdgeTTS: edgeTtsMock }));
 
 import { TtsProviderError, ttsProvider } from "../src/lib/providers";
-import { detectSpeechEmotion, duckVideoAudio, getSpeechProsody, MONGOLIAN_TTS_VOICES } from "../src/lib/speech";
+import { detectSpeechEmotion, duckVideoAudio, getSpeechProsody, getExpressiveSpeechProsody, MONGOLIAN_TTS_VOICES } from "../src/lib/speech";
 
 afterEach(() => edgeTtsMock.mockReset());
 
 describe("Mongolian speech emotion", () => {
+  it("adds expressive energy without making sad speech fast and cheerful", () => {
+    expect(getExpressiveSpeechProsody("Wow, amazing!")).toEqual({ rate: "+22%", pitch: "+10%", volume: "+22%" });
+    expect(getExpressiveSpeechProsody("I'm sad!").rate).toBe("-14%");
+    expect(getExpressiveSpeechProsody("Go!").volume).toBe("+18%");
+  });
   it.each([
     ["Fuck off, you bastard!", "angry"],
     ["Зайл, новш минь!", "angry"],

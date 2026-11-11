@@ -12,9 +12,11 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build && npm run typecheck:extension && npm run build:extension",
+    "check": "npm run lint && npm run typecheck && npm run typecheck:extension && npm run typecheck:extension-tests && npm test && npm run build && npm run build:extension",
     "typecheck:extension": "tsc --noEmit -p extension/tsconfig.json",
-    "build:extension": "node scripts/build-extension.mjs",
+    "typecheck:extension-tests": "tsc --noEmit -p tsconfig.extension-tests.json",
+    "build:extension": "node scripts/build-extension.mjs && npm run validate:extension",
+    "validate:extension": "node scripts/validate-extension.mjs",
     "package:extension": "npm run build:extension && node scripts/package-extension.mjs"
   },
   "dependencies": {

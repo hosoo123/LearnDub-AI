@@ -1,5 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { platform } from "node:os";
+import { validateExtension } from "./validate-extension.mjs";
+
+await validateExtension();
 
 const extensionDirectory = "extension";
 const archiveName = "learndub-ai-chrome.zip";

@@ -12,6 +12,9 @@ export async function POST(request: Request) {
     const body: unknown = await request.json();
     if (!isRecord(body)) return Response.json({ error: "Хүсэлтийн JSON объект шаардлагатай." }, { status: 400 });
     const text = body.text;
+    if (body.expressive !== undefined && typeof body.expressive !== "boolean") {
+      return Response.json({ error: "expressive талбар boolean байх ёстой." }, { status: 400 });
+    }
     if (typeof text !== "string" || !text.trim()) return Response.json({ error: "text талбар хоосон байж болохгүй." }, { status: 400 });
     if (text.length > MAX_TEXT_LENGTH) return Response.json({ error: `Текст ${MAX_TEXT_LENGTH} тэмдэгтээс урт байж болохгүй.` }, { status: 413 });
     if (body.sourceText !== undefined && (typeof body.sourceText !== "string" || body.sourceText.length > MAX_TEXT_LENGTH)) {
@@ -23,6 +26,7 @@ export async function POST(request: Request) {
     }
     return Response.json(await ttsProvider.synthesize(text.trim(), {
       voice,
+      expressive: body.expressive === true,
       ...(typeof body.sourceText === "string" ? { sourceText: body.sourceText } : {}),
     }));
   } catch (error) {

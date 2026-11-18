@@ -1,4 +1,5 @@
 export type VideoCue = { start: number; end: number; text: string };
+type StoredVideoCue = VideoCue & { key: string };
 
 export function validateVideoCues(value: unknown): VideoCue[] {
   if (!Array.isArray(value) || !value.length || value.length > 20000) throw new Error("Бичлэгээс хугацаатай хадмал олдсонгүй.");
@@ -15,14 +16,14 @@ export function validateVideoCues(value: unknown): VideoCue[] {
 
 export class VideoCaptions {
   private videoId: string | undefined;
-  private cues: VideoCue[] = [];
+  private cues: StoredVideoCue[] = [];
 
   hasFor(videoId: string | undefined) {
     return Boolean(videoId && videoId === this.videoId);
   }
 
   load(videoId: string, cues: unknown) {
-    this.cues = validateVideoCues(cues);
+    this.cues = validateVideoCues(cues).map((cue, index) => ({ ...cue, key: `${videoId}:${index}:${cue.start}:${cue.end}` }));
     this.videoId = videoId;
     return this.cues.length;
   }
@@ -35,6 +36,11 @@ export class VideoCaptions {
   endAt(videoId: string | undefined, time: number) {
     if (!this.hasFor(videoId)) return undefined;
     return this.cues.find((cue) => time >= cue.start && time < cue.end)?.end;
+  }
+
+  keyAt(videoId: string | undefined, time: number) {
+    if (!this.hasFor(videoId)) return undefined;
+    return this.cues.find((cue) => time >= cue.start && time < cue.end)?.key;
   }
 
   upcoming(videoId: string | undefined, time: number) {

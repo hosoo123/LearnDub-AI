@@ -25,6 +25,7 @@ describe("video transcript playback", () => {
     captions.load("first", [{ start: 3, end: 4, text: "Later" }, { start: 1, end: 2, text: "Earlier" }]);
     expect(captions.read("first", 3.5)).toBe("Later");
     expect(captions.read("first", 1)).toBe("Earlier");
+    expect(captions.keyAt("first", 1)).not.toBe(captions.keyAt("first", 3.5));
     expect(captions.read("first", 2)).toBe("");
     expect(captions.read("other", 1)).toBe("");
     expect(captions.hasFor("other")).toBe(false);

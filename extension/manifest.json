@@ -6,6 +6,6 @@
   "background": { "service_worker": "dist/background.js", "type": "module" },
   "action": { "default_popup": "dist/popup.html", "default_title": "LearnDub AI" },
   "content_scripts": [{ "matches": ["https://www.youtube.com/*"], "js": ["dist/content.js"], "run_at": "document_idle" }],
-  "permissions": ["activeTab"],
-  "host_permissions": ["https://www.youtube.com/*", "http://localhost:3000/*"]
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["https://www.youtube.com/*", "http://localhost/*", "http://127.0.0.1/*"]
 }

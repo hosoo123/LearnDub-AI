@@ -1,10 +1,12 @@
 import { getYouTubeVideoId } from "./captions";
+import { getServerUrl, normalizeServerUrl } from "./server-config";
 type ContentReply = {
   ok?: boolean;
   error?: string;
   message?: string;
   recording?: boolean;
   captionsEnabled?: boolean;
+  captionDetected?: boolean;
   count?: number;
   vtt?: string;
   translating?: boolean;
@@ -23,6 +25,14 @@ const translationButton = document.querySelector<HTMLButtonElement>("#translate-
 const syncMode = document.querySelector<HTMLInputElement>("#sync-mode");
 const speechGain = document.querySelector<HTMLInputElement>("#speech-gain");
 const originalMix = document.querySelector<HTMLInputElement>("#original-mix");
+const serverUrlInput = document.querySelector<HTMLInputElement>("#server-url");
+serverUrlInput?.addEventListener("change", async () => {
+  try {
+    const serverUrl = normalizeServerUrl(serverUrlInput.value);
+    await chrome.storage.local.set({ serverUrl });
+    serverUrlInput.value = serverUrl;
+  } catch (error) { showError(error); }
+});
 let settingsPending = false;
 for (const input of [syncMode, speechGain, originalMix]) input?.addEventListener("change", async () => {
   if (!syncMode || !speechGain || !originalMix) return;
@@ -106,7 +116,9 @@ async function refreshStatus() {
       statusElement.textContent = reply.speechError ?? reply.translationError ?? reply.error ?? (reply.syncWaiting
         ? "Синк: орчуулга/дуу бэлдэж байна… Видео түр хүлээж байна."
         : reply.translating
-        ? "Монгол хадмал асаалттай. English CC асааж видеогоо тоглуулаарай."
+        ? reply.captionDetected
+          ? "English CC уншигдлаа. Монгол орчуулга бэлтгэгдэж байна."
+          : "Монгол хадмал асаалттай боловч CC текст уншигдсангүй. English CC сонгоод видеогоо тоглуулна уу."
         : reply.recording
         ? "Видеогоо тоглуулаад дууссаны дараа бичлэгийг зогсооно уу."
         : reply.captionsEnabled
@@ -190,11 +202,13 @@ stopButton?.addEventListener("click", async () => {
 
 openAppButton?.addEventListener("click", async () => {
   try {
-    await chrome.tabs.create({ url: "http://localhost:3000" });
+    await chrome.tabs.create({ url: await getServerUrl() });
   } catch (error) {
     showError(error);
   }
 });
+
+void getServerUrl().then((url) => { if (serverUrlInput) serverUrlInput.value = url; }).catch(showError);
 
 void refreshStatus();
 const statusTimer = window.setInterval(() => void refreshStatus(), 2000);

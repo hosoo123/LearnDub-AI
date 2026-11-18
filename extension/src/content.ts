@@ -1,4 +1,4 @@
-import { CaptionRecorder, getYouTubeVideoId } from "./captions";
+import { CaptionRecorder, getYouTubeVideoId, readYouTubeCaption } from "./captions";
 import { LiveTranslation } from "./live-translation";
 import { VideoCaptions } from "./video-captions";
 
@@ -8,7 +8,8 @@ const liveTranslation = new LiveTranslation(() => videoCaptions.hasFor(getVideoI
   ? videoCaptions.read(getVideoId(), document.querySelector<HTMLVideoElement>("video")?.currentTime ?? 0)
   : visibleCaptionText(), getVideoId,
   () => videoCaptions.endAt(getVideoId(), document.querySelector<HTMLVideoElement>("video")?.currentTime ?? 0),
-  () => videoCaptions.upcoming(getVideoId(), document.querySelector<HTMLVideoElement>("video")?.currentTime ?? 0));
+  () => videoCaptions.upcoming(getVideoId(), document.querySelector<HTMLVideoElement>("video")?.currentTime ?? 0),
+  () => videoCaptions.keyAt(getVideoId(), document.querySelector<HTMLVideoElement>("video")?.currentTime ?? 0));
 
 let video: HTMLVideoElement | null = null;
 let captureTimer: number | undefined;
@@ -18,13 +19,7 @@ let captureError: string | undefined;
 let captureVideoId: string | undefined;
 
 function visibleCaptionText() {
-  return Array.from(document.querySelectorAll<HTMLElement>(".ytp-caption-segment"))
-    .filter((element) => element.getClientRects().length > 0)
-    .map((element) => element.textContent?.trim() ?? "")
-    .filter(Boolean)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return readYouTubeCaption(document, document.querySelector<HTMLVideoElement>("video"));
 }
 
 function getVideoId() {
@@ -150,6 +145,7 @@ chrome.runtime.onMessage.addListener((message: CaptureMessage, _sender, sendResp
       recording: captureTimer !== undefined,
       count: recorder?.count ?? lastCaptureCount,
       captionsEnabled: document.querySelector(".ytp-subtitles-button[aria-pressed='true']") !== null,
+      captionDetected: Boolean(visibleCaptionText()),
       ...(captureError ? { error: captureError } : {}),
     });
   }

@@ -45,6 +45,7 @@ await writeFile(`${outdir}/popup.html`, `<!doctype html>
       <label><input id="sync-mode" type="checkbox"> Дуу бэлдэх зуур видеог хүлээлгэх</label>
       <label>AI дуу <input id="speech-gain" type="range" min="25" max="200" value="125" step="5"></label>
       <label>AI ярианы үеийн эх дуу <input id="original-mix" type="range" min="0" max="100" value="15" step="5"></label>
+      <label>Local сервер <input id="server-url" type="url" value="http://localhost:3000" spellcheck="false"></label>
       <p class="privacy">Синк горим нэг мөр дээр 8 секунд хүртэл хүлээнэ. Эх дууны тохиргоо зөвхөн AI ярьж байх үед үйлчилнэ.</p>
       <p class="privacy">Монгол дуу асаахад орчуулсан текст Microsoft Edge онлайн TTS үйлчилгээнд илгээгдэнэ. Дуу эхлэхэд видеоны эх дуу түр намсана.</p>
       <button id="capture-start" type="button">Хадмал бичиж эхлэх</button>

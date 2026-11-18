@@ -19,6 +19,22 @@ export function getYouTubeVideoId(href: string) {
   return videoId?.trim() || undefined;
 }
 
+export function readYouTubeCaption(doc: Document = document, video?: HTMLVideoElement | null) {
+  const segments = Array.from(doc.querySelectorAll<HTMLElement>(".ytp-caption-segment"))
+    .filter((element) => element.getAttribute("aria-hidden") !== "true")
+    .map((element) => element.textContent?.trim() ?? "")
+    .filter(Boolean);
+  if (segments.length) return [...new Set(segments)].join(" ").replace(/\s+/g, " ").trim();
+
+  // YouTube changes its caption DOM regularly. Native active cues are a more stable fallback.
+  const active = Array.from(video?.textTracks ?? []).flatMap((track) =>
+    Array.from(track.activeCues ?? []).map((cue) => "text" in cue && typeof cue.text === "string" ? cue.text : ""));
+  if (active.some(Boolean)) return [...new Set(active.filter(Boolean))].join(" ").replace(/\s+/g, " ").trim();
+
+  const container = doc.querySelector<HTMLElement>(".ytp-caption-window-container, .caption-window");
+  return (container?.innerText ?? container?.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
 export class CaptionRecorder {
   private readonly readCaption: () => string;
   private captions: CapturedCaption[] = [];

@@ -14,7 +14,8 @@ export class LiveSpeech {
   originalMix = 0.15;
   private generation = 0;
   private source = "";
-  private spoken = "";
+  private cueKey = "";
+  private spokenKey = "";
   private audio: HTMLAudioElement | undefined;
   private video: HTMLVideoElement | undefined;
   private restoreVolume: (() => void) | undefined;
@@ -31,11 +32,11 @@ export class LiveSpeech {
       this.pausedByVideo = true;
       this.restoreVolume?.();
       this.restoreVolume = undefined;
-    } else if (!this.preparing) this.spoken = "";
+    } else if (!this.preparing) this.spokenKey = "";
   };
   private onWaiting = () => { this.buffering = true; this.pauseWithVideo(); };
   private onPlaying = () => { this.buffering = false; };
-  private interrupt = () => { this.stop(); this.spoken = ""; };
+  private interrupt = () => { this.stop(); this.spokenKey = ""; };
 
   toggle() {
     this.enabled = !this.enabled;
@@ -56,10 +57,11 @@ export class LiveSpeech {
     this.restoreVolume = undefined;
   }
 
-  sync(video: HTMLVideoElement | null, source: string, translation?: string, cueEnd?: number) {
+  sync(video: HTMLVideoElement | null, source: string, translation?: string, cueEnd?: number, cueKey = source) {
     if ((video ?? undefined) !== this.video) {
       this.interrupt();
       this.source = "";
+      this.cueKey = "";
       this.cueEnd = undefined;
       for (const event of ["seeking", "ended", "emptied"]) this.video?.removeEventListener(event, this.interrupt);
       this.video?.removeEventListener("pause", this.pauseWithVideo);
@@ -72,9 +74,10 @@ export class LiveSpeech {
       this.video?.addEventListener("waiting", this.onWaiting);
       this.video?.addEventListener("playing", this.onPlaying);
     }
-    if (source !== this.source) {
+    if (cueKey !== this.cueKey || source !== this.source) {
       this.interrupt();
       this.source = source;
+      this.cueKey = cueKey;
       this.cueEnd = cueEnd ?? (video && Number.isFinite(video.currentTime)
         ? video.currentTime + Math.min(10, Math.max(1.5, source.split(/\s+/).length / 2.7)) : undefined);
     }
@@ -89,15 +92,15 @@ export class LiveSpeech {
         if (generation === this.generation) { this.stop(); this.error = "Монгол дууг үргэлжлүүлж чадсангүй."; }
       });
     }
-    if (!this.enabled || this.error || !video || video.paused || video.seeking || this.buffering || !source || !translation || this.spoken === source) return;
-    this.spoken = source;
+    if (!this.enabled || this.error || !video || video.paused || video.seeking || this.buffering || !source || !translation || this.spokenKey === cueKey) return;
+    this.spokenKey = cueKey;
     this.preparing = true;
     const generation = this.generation;
     void (async () => {
       try {
         const audioUrl = await this.prepare(source, translation);
         if (!this.enabled || generation !== this.generation) return;
-        if (video.paused || video.seeking || this.buffering) { this.spoken = ""; return; }
+        if (video.paused || video.seeking || this.buffering) { this.spokenKey = ""; return; }
         if (this.cueEnd !== undefined && this.cueEnd - video.currentTime < 0.2) return;
         const audio = new Audio(audioUrl);
         this.audio = audio;

@@ -6,13 +6,15 @@ afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 function setup() {
   vi.useFakeTimers();
   let caption = "Hello";
+  let cueKey: string | undefined;
   const overlay = { style: { cssText: "" }, textContent: "", hidden: false, isConnected: true, remove: vi.fn() };
   vi.stubGlobal("window", globalThis);
   vi.stubGlobal("document", { querySelector: (selector: string) => selector === "video" ? null : ({ append: vi.fn() }), createElement: () => overlay });
   const sendMessage = vi.fn();
   vi.stubGlobal("chrome", { runtime: { sendMessage } });
-  const live = new LiveTranslation(() => caption, () => "video-1");
-  return { live, overlay, sendMessage, setCaption: (value: string) => { caption = value; } };
+  const live = new LiveTranslation(() => caption, () => "video-1", undefined, undefined, () => cueKey);
+  return { live, overlay, sendMessage, setCaption: (value: string) => { caption = value; },
+    setCueKey: (value: string | undefined) => { cueKey = value; } };
 }
 
 describe("live YouTube translation", () => {
@@ -90,6 +92,19 @@ describe("live YouTube translation", () => {
     await vi.advanceTimersByTimeAsync(3000);
     expect(live.error).toBe("Server unavailable");
     expect(sendMessage).toHaveBeenCalledTimes(1);
+    live.toggle();
+  });
+
+  it("translates identical text again when it belongs to a different timed cue", async () => {
+    const { live, sendMessage, setCueKey } = setup();
+    sendMessage.mockResolvedValueOnce({ ok: true, text: "Эхний утга" })
+      .mockResolvedValueOnce({ ok: true, text: "Дараагийн утга" });
+    setCueKey("cue-1");
+    live.toggle();
+    await vi.advanceTimersByTimeAsync(750);
+    setCueKey("cue-2");
+    await vi.advanceTimersByTimeAsync(750);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
     live.toggle();
   });
 });

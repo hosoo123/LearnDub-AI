@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { CaptionRecorder, captionsToVtt, getYouTubeVideoId } from "../extension/src/captions";
+import { CaptionRecorder, captionsToVtt, getYouTubeVideoId, readYouTubeCaption } from "../extension/src/captions";
 
 describe("YouTube caption export", () => {
+  it("reads and deduplicates YouTube caption segments", () => {
+    const elements = [{ textContent: " Hello ", getAttribute: () => null }, { textContent: "Hello", getAttribute: () => null },
+      { textContent: "world", getAttribute: () => null }];
+    const doc = { querySelectorAll: () => elements, querySelector: () => null } as unknown as Document;
+    expect(readYouTubeCaption(doc)).toBe("Hello world");
+  });
+
+  it("falls back to native active text-track cues", () => {
+    const doc = { querySelectorAll: () => [], querySelector: () => null } as unknown as Document;
+    const video = { textTracks: [{ activeCues: [{ text: "Native caption" }] }] } as unknown as HTMLVideoElement;
+    expect(readYouTubeCaption(doc, video)).toBe("Native caption");
+  });
   it.each([
     ["https://www.youtube.com/watch?v=video123", "video123"],
     ["https://www.youtube.com/shorts/short123", "short123"],

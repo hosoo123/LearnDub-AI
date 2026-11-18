@@ -1,4 +1,5 @@
 import { contextualSegments, type ContextCue } from "./translation-context";
+import { getServerUrl } from "./server-config";
 // Cross-origin requests belong in the extension worker, not the YouTube page.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== "LEARNDUB_TRANSLATE" && message?.type !== "LEARNDUB_TTS") return;
@@ -13,7 +14,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     && (!("translatedText" in cue) || (typeof cue.translatedText === "string" && cue.translatedText.length <= 3000))) : [];
   void (async () => {
     try {
-      const response = await fetch(`http://localhost:3000/api/${speech ? "tts" : "translate"}`, {
+      const serverUrl = await getServerUrl();
+      const response = await fetch(`${serverUrl}/api/${speech ? "tts" : "translate"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(speech ? {

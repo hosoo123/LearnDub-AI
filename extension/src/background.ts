@@ -21,6 +21,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         body: JSON.stringify(speech ? {
           text: message.text, voice: "mn-MN-BataaNeural", expressive: true,
           ...(typeof message.sourceText === "string" ? { sourceText: message.sourceText.slice(0, 1500) } : {}),
+          ...(typeof message.cueDuration === "number" && Number.isFinite(message.cueDuration)
+            ? { cueDuration: Math.min(30, Math.max(0.2, message.cueDuration)) } : {}),
+          ...(message.sourceDelivery && typeof message.sourceDelivery === "object" ? { sourceDelivery: message.sourceDelivery } : {}),
         } : {
           segments: contextualSegments(message.text, history), style: "dialogue",
         }),

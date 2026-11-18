@@ -8,11 +8,30 @@ const edgeTtsMock = vi.hoisted(() => vi.fn(class {
 vi.mock("node-edge-tts", () => ({ EdgeTTS: edgeTtsMock }));
 
 import { TtsProviderError, ttsProvider } from "../src/lib/providers";
-import { detectSpeechEmotion, duckVideoAudio, getSpeechProsody, getExpressiveSpeechProsody, MONGOLIAN_TTS_VOICES } from "../src/lib/speech";
+import { applySourceDelivery, detectSpeechEmotion, duckVideoAudio, estimateSpeechDuration, getSpeechProsody, getExpressiveSpeechProsody, getTimedExpressiveSpeechProsody, MONGOLIAN_TTS_VOICES, normalizeMongolianSpeechText } from "../src/lib/speech";
 
 afterEach(() => edgeTtsMock.mockReset());
 
 describe("Mongolian speech emotion", () => {
+  it("normalizes numbers, URLs and common technical names for Mongolian speech", () => {
+    expect(normalizeMongolianSpeechText("AI нь 125.5% өсөж, $20 болсон. https://openai.com/api"))
+      .toBe("эй ай нь нэг зуу хорин тав цэг тав хувь өсөж, хорь доллар болсон. вэб хаяг Оупэн Эй Ай цэг com цэг эй пи ай");
+    expect(normalizeMongolianSpeechText("YouTube, ChatGPT, API, TTS, CC"))
+      .toBe("Юүтүб, Чат Жи Пи Ти, эй пи ай, ти ти эс, си си");
+  });
+  it("fits expressive delivery to the cue without extreme synthesis rates", () => {
+    expect(estimateSpeechDuration("Нэг хоёр гурав дөрөв тав зургаа.")).toBeGreaterThan(2);
+    expect(getTimedExpressiveSpeechProsody("Long line", "Нэг хоёр гурав дөрөв тав зургаа.", 1).rate).toBe("+45%");
+    expect(getTimedExpressiveSpeechProsody("I'm sad", "Би гунигтай байна.", 8).rate).toBe("-14%");
+  });
+  it("adapts rate and volume to measured source delivery", () => {
+    const energetic = applySourceDelivery({ rate: "+5%", pitch: "default", volume: "+6%" },
+      { loudness: 0.1, pauseRatio: 0.1, tempo: 1.4, energy: 0.9 });
+    expect(energetic.rate).toBe("+19%");
+    expect(energetic.volume).toBe("+18%");
+    expect(applySourceDelivery({ rate: "default", pitch: "default", volume: "default" },
+      { loudness: 0, pauseRatio: 1, tempo: 1, energy: 0 }).rate).toBe("-6%");
+  });
   it("adds expressive energy without making sad speech fast and cheerful", () => {
     expect(getExpressiveSpeechProsody("Wow, amazing!")).toEqual({ rate: "+22%", pitch: "+10%", volume: "+22%" });
     expect(getExpressiveSpeechProsody("I'm sad!").rate).toBe("-14%");

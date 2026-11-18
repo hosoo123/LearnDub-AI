@@ -1,13 +1,13 @@
 import { formatRelevantGlossary } from "./translation-glossary";
 import { EdgeTTS } from "node-edge-tts";
-import { getSpeechProsody, getExpressiveSpeechProsody, MONGOLIAN_TTS_VOICES, type MongolianTtsVoice } from "./speech";
+import { applySourceDelivery, getSpeechProsody, getTimedExpressiveSpeechProsody, MONGOLIAN_TTS_VOICES, normalizeMongolianSpeechText, type MongolianTtsVoice, type SourceDeliveryProfile } from "./speech";
 import type { TranslationStyle } from "./translation-style";
 
 export type TranslationResult = { status: "demo" | "ready"; translatedText?: string; message: string };
 export type TranslationSegment = { id: string; text: string; contextTranslation?: string };
 export type TranslatedSegment = { id: string; translatedText: string };
 export type TtsResult = { status: "not-configured" | "ready"; audioUrl?: string; message: string };
-export type TtsOptions = { voice?: MongolianTtsVoice; sourceText?: string; expressive?: boolean };
+export type TtsOptions = { voice?: MongolianTtsVoice; sourceText?: string; expressive?: boolean; cueDuration?: number; sourceDelivery?: SourceDeliveryProfile };
 
 export interface TranslationProvider {
   translate(text: string, style?: TranslationStyle): Promise<TranslationResult>;
@@ -198,8 +198,10 @@ export const translationProvider: TranslationProvider = {
 };
 
 export const ttsProvider: TtsProvider = {
-  async synthesize(text, { voice = MONGOLIAN_TTS_VOICES.bataa, sourceText = text, expressive = false } = {}) {
-    const prosody = expressive ? getExpressiveSpeechProsody(sourceText, text) : getSpeechProsody(sourceText, text);
+  async synthesize(text, { voice = MONGOLIAN_TTS_VOICES.bataa, sourceText = text, expressive = false, cueDuration, sourceDelivery } = {}) {
+    const speechText = normalizeMongolianSpeechText(text);
+    const prosody = applySourceDelivery(expressive
+      ? getTimedExpressiveSpeechProsody(sourceText, speechText, cueDuration) : getSpeechProsody(sourceText, speechText), sourceDelivery);
     const provider = new EdgeTTS({
       voice,
       lang: "mn-MN",
@@ -212,7 +214,7 @@ export const ttsProvider: TtsProvider = {
     const chunks: Buffer[] = [];
 
     try {
-      for await (const chunk of provider.streamAudio(text)) {
+      for await (const chunk of provider.streamAudio(speechText)) {
         if (Buffer.isBuffer(chunk)) chunks.push(chunk);
       }
     } catch (error) {

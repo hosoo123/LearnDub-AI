@@ -1,4 +1,5 @@
 import { VoiceMixer } from "./voice-mixer";
+import { SourceAudioAnalyzer } from "./source-audio-analyzer";
 
 export function synchronizedSpeechRate(audioRemaining: number, videoRemaining: number, videoRate: number) {
   const rate = Number.isFinite(videoRate) && videoRate > 0 ? videoRate : 1;
@@ -23,6 +24,7 @@ export class LiveSpeech {
   private audioCache = new Map<string, string>();
   private requests = new Map<string, Promise<string>>();
   private mixer = new VoiceMixer();
+  private sourceAnalyzer = new SourceAudioAnalyzer();
   private pausedByVideo = false;
   private buffering = false;
   private preparing = false;
@@ -58,6 +60,7 @@ export class LiveSpeech {
   }
 
   sync(video: HTMLVideoElement | null, source: string, translation?: string, cueEnd?: number, cueKey = source) {
+    this.sourceAnalyzer.sample(video);
     if ((video ?? undefined) !== this.video) {
       this.interrupt();
       this.source = "";
@@ -98,7 +101,7 @@ export class LiveSpeech {
     const generation = this.generation;
     void (async () => {
       try {
-        const audioUrl = await this.prepare(source, translation);
+        const audioUrl = await this.prepare(source, translation, this.cueEnd === undefined ? undefined : this.cueEnd - video.currentTime);
         if (!this.enabled || generation !== this.generation) return;
         if (video.paused || video.seeking || this.buffering) { this.spokenKey = ""; return; }
         if (this.cueEnd !== undefined && this.cueEnd - video.currentTime < 0.2) return;
@@ -142,7 +145,7 @@ export class LiveSpeech {
     }
   }
 
-  async prepare(source: string, translation: string): Promise<string> {
+  async prepare(source: string, translation: string, cueDuration?: number): Promise<string> {
     if (!this.enabled) throw new Error("Монгол дуу унтраалттай байна.");
     const key = JSON.stringify([source, translation]);
     const cached = this.audioCache.get(key);
@@ -150,7 +153,9 @@ export class LiveSpeech {
     const existing = this.requests.get(key);
     if (existing) return existing;
     const request = (async () => {
-      const reply = await chrome.runtime.sendMessage({ type: "LEARNDUB_TTS", text: translation, sourceText: source });
+      const reply = await chrome.runtime.sendMessage({ type: "LEARNDUB_TTS", text: translation, sourceText: source,
+        ...(cueDuration !== undefined && Number.isFinite(cueDuration) ? { cueDuration: Math.max(0.2, cueDuration) } : {}),
+        sourceDelivery: this.sourceAnalyzer.profile });
       if (!reply?.ok || typeof reply.audioUrl !== "string" || !reply.audioUrl.startsWith("data:audio/mpeg;base64,")) {
         throw new Error(reply?.error ?? "Монгол дуу үүссэнгүй.");
       }

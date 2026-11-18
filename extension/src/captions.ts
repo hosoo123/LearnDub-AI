@@ -20,11 +20,13 @@ export function getYouTubeVideoId(href: string) {
 }
 
 export function readYouTubeCaption(doc: Document = document, video?: HTMLVideoElement | null) {
-  const segments = Array.from(doc.querySelectorAll<HTMLElement>(".ytp-caption-segment"))
-    .filter((element) => element.getAttribute("aria-hidden") !== "true")
-    .map((element) => element.textContent?.trim() ?? "")
-    .filter(Boolean);
-  if (segments.length) return [...new Set(segments)].join(" ").replace(/\s+/g, " ").trim();
+  for (const selector of [".ytp-caption-segment", ".caption-visual-line", ".captions-text"]) {
+    const segments = Array.from(doc.querySelectorAll<HTMLElement>(selector))
+      .filter((element) => element.getAttribute("aria-hidden") !== "true")
+      .map((element) => element.textContent?.trim() ?? "")
+      .filter(Boolean);
+    if (segments.length) return [...new Set(segments)].join(" ").replace(/\s+/g, " ").trim();
+  }
 
   // YouTube changes its caption DOM regularly. Native active cues are a more stable fallback.
   const active = Array.from(video?.textTracks ?? []).flatMap((track) =>

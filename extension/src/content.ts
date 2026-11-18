@@ -132,6 +132,7 @@ chrome.runtime.onMessage.addListener((message: CaptureMessage, _sender, sendResp
     return;
   }
   if (message.type === "LEARNDUB_CAPTURE_STATUS") {
+    const translationStatus = liveTranslation.status;
     sendResponse({
       ok: true,
       translating: liveTranslation.enabled,
@@ -145,7 +146,9 @@ chrome.runtime.onMessage.addListener((message: CaptureMessage, _sender, sendResp
       recording: captureTimer !== undefined,
       count: recorder?.count ?? lastCaptureCount,
       captionsEnabled: document.querySelector(".ytp-subtitles-button[aria-pressed='true']") !== null,
-      captionDetected: Boolean(visibleCaptionText()),
+      captionDetected: translationStatus.captionDetected || Boolean(visibleCaptionText()),
+      translationPending: translationStatus.requestPending,
+      translationReady: translationStatus.translated,
       ...(captureError ? { error: captureError } : {}),
     });
   }

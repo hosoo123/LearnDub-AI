@@ -7,6 +7,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function sourceDelivery(value: unknown) {
+  if (!isRecord(value)) return undefined;
+  const keys = ["loudness", "pauseRatio", "tempo", "energy"] as const;
+  if (!keys.every((key) => typeof value[key] === "number" && Number.isFinite(value[key]))) return undefined;
+  const profile = value as Record<(typeof keys)[number], number>;
+  if (profile.loudness < 0 || profile.loudness > 1 || profile.pauseRatio < 0 || profile.pauseRatio > 1
+    || profile.tempo < 0.5 || profile.tempo > 2 || profile.energy < 0 || profile.energy > 1) return undefined;
+  return { loudness: profile.loudness, pauseRatio: profile.pauseRatio, tempo: profile.tempo, energy: profile.energy };
+}
+
 export async function POST(request: Request) {
   try {
     const body: unknown = await request.json();
@@ -20,6 +30,14 @@ export async function POST(request: Request) {
     if (body.sourceText !== undefined && (typeof body.sourceText !== "string" || body.sourceText.length > MAX_TEXT_LENGTH)) {
       return Response.json({ error: `sourceText талбар ${MAX_TEXT_LENGTH} тэмдэгтээс уртгүй текст байх ёстой.` }, { status: 400 });
     }
+    if (body.cueDuration !== undefined && (typeof body.cueDuration !== "number" || !Number.isFinite(body.cueDuration)
+      || body.cueDuration < 0.2 || body.cueDuration > 30)) {
+      return Response.json({ error: "cueDuration талбар 0.2–30 секундийн тоо байх ёстой." }, { status: 400 });
+    }
+    const delivery = body.sourceDelivery === undefined ? undefined : sourceDelivery(body.sourceDelivery);
+    if (body.sourceDelivery !== undefined && !delivery) {
+      return Response.json({ error: "sourceDelivery талбарын утга буруу байна." }, { status: 400 });
+    }
     const voice = body.voice === undefined ? MONGOLIAN_TTS_VOICES.bataa : body.voice;
     if (!isMongolianTtsVoice(voice)) {
       return Response.json({ error: "Дэмжигдээгүй Монгол дуу хоолой сонгосон байна." }, { status: 400 });
@@ -27,6 +45,8 @@ export async function POST(request: Request) {
     return Response.json(await ttsProvider.synthesize(text.trim(), {
       voice,
       expressive: body.expressive === true,
+      ...(typeof body.cueDuration === "number" ? { cueDuration: body.cueDuration } : {}),
+      ...(delivery ? { sourceDelivery: delivery } : {}),
       ...(typeof body.sourceText === "string" ? { sourceText: body.sourceText } : {}),
     }));
   } catch (error) {

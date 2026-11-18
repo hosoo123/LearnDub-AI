@@ -24,6 +24,14 @@ export class LiveTranslation {
   private prefetching = false;
   private requests = new PendingRequests<Reply>();
 
+  get status() {
+    return {
+      captionDetected: Boolean(this.source),
+      requestPending: this.activeKeys.has(this.cacheKey),
+      translated: Boolean(this.cache.get(this.cacheKey)),
+    };
+  }
+
   constructor(private readCaption: () => string, private getVideoId: () => string | undefined,
     private getCueEnd: () => number | undefined = () => undefined,
     private upcoming: () => readonly { text: string; key?: string }[] = () => [],
@@ -84,7 +92,8 @@ export class LiveTranslation {
     if (!player) return;
     if (!this.overlay?.isConnected) {
       this.overlay = document.createElement("div");
-      this.overlay.style.cssText = "position:absolute;bottom:18%;left:5%;width:90%;z-index:60;pointer-events:none;text-align:center;font:600 clamp(16px,2vw,28px)/1.4 Arial,sans-serif;color:white;text-shadow:0 2px 4px black;white-space:pre-wrap;";
+      this.overlay.setAttribute("data-learndub-overlay", "true");
+      this.overlay.style.cssText = "position:absolute!important;bottom:22%!important;left:5%!important;width:90%!important;z-index:2147483647!important;pointer-events:none!important;text-align:center!important;font:700 clamp(18px,2.2vw,30px)/1.4 Arial,sans-serif!important;color:#fff!important;text-shadow:0 2px 5px #000,0 0 2px #000!important;white-space:pre-wrap!important;";
       player.append(this.overlay);
     }
     this.overlay.textContent = text;
@@ -107,8 +116,9 @@ export class LiveTranslation {
       this.speech.sync(null, "");
       this.render("");
     }
-    if (!videoId) { this.render(""); return; }
+    if (!videoId) { this.render("LearnDub: YouTube видео олдсонгүй"); return; }
     const source = this.readCaption();
+    if (!source) this.render("LearnDub: English CC хүлээж байна…");
     const video = document.querySelector<HTMLVideoElement>("video");
     if (video && (video.currentTime < this.lastVideoTime - 0.5 || video.currentTime > this.lastVideoTime + 3)) {
       this.syncGate.release(false);
@@ -130,7 +140,7 @@ export class LiveTranslation {
       this.cueKey = cueKey;
       this.cacheKey = cueKey;
       this.changedAt = Date.now();
-      this.render(this.cache.get(this.cacheKey) ?? "");
+      this.render(this.cache.get(this.cacheKey) ?? (source ? "LearnDub: Орчуулж байна…" : "LearnDub: English CC хүлээж байна…"));
     }
     const currentKey = this.cacheKey;
     const translated = this.cache.get(currentKey);
@@ -140,7 +150,8 @@ export class LiveTranslation {
     if (Date.now() - this.changedAt >= 450) this.syncGate.update(video, source, ready || Boolean(this.error || this.speech.error));
     if (this.syncGate.waiting && translated && this.speech.enabled && !this.speech.isPrepared(source, translated)) {
       const generation = this.generation;
-      void this.speech.prepare(source, translated).catch((error: unknown) => {
+      const videoRemaining = video && this.getCueEnd() !== undefined ? this.getCueEnd()! - video.currentTime : undefined;
+      void this.speech.prepare(source, translated, videoRemaining).catch((error: unknown) => {
         if (!this.enabled || generation !== this.generation || source !== this.source) return;
         this.speech.error = error instanceof Error ? error.message : "Монгол дуу бэлэн болсонгүй.";
         this.syncGate.release(true);
@@ -152,6 +163,7 @@ export class LiveTranslation {
       || this.activeKeys.size >= 2 || Date.now() - this.changedAt < 450) return;
     const generation = this.generation;
     this.activeKeys.add(currentKey);
+    this.render("LearnDub: Орчуулж байна…");
     try {
       const reply = await this.translate(source,
         this.history.map((cue) => ({ ...cue, translatedText: this.cache.get(cue.text) ?? cue.translatedText })));

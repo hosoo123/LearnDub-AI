@@ -7,6 +7,8 @@ type ContentReply = {
   recording?: boolean;
   captionsEnabled?: boolean;
   captionDetected?: boolean;
+  translationPending?: boolean;
+  translationReady?: boolean;
   count?: number;
   vtt?: string;
   translating?: boolean;
@@ -116,8 +118,12 @@ async function refreshStatus() {
       statusElement.textContent = reply.speechError ?? reply.translationError ?? reply.error ?? (reply.syncWaiting
         ? "Синк: орчуулга/дуу бэлдэж байна… Видео түр хүлээж байна."
         : reply.translating
-        ? reply.captionDetected
-          ? "English CC уншигдлаа. Монгол орчуулга бэлтгэгдэж байна."
+        ? reply.translationReady
+          ? "Монгол хадмал бэлэн. Видеон дээр LearnDub хадмал харагдана."
+          : reply.translationPending
+            ? "English CC уншигдлаа. Ollama орчуулж байна…"
+            : reply.captionDetected
+              ? "English CC уншигдлаа. Орчуулгын хүсэлт бэлтгэж байна…"
           : "Монгол хадмал асаалттай боловч CC текст уншигдсангүй. English CC сонгоод видеогоо тоглуулна уу."
         : reply.recording
         ? "Видеогоо тоглуулаад дууссаны дараа бичлэгийг зогсооно уу."

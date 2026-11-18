@@ -7,7 +7,8 @@ function setup() {
   vi.useFakeTimers();
   let caption = "Hello";
   let cueKey: string | undefined;
-  const overlay = { style: { cssText: "" }, textContent: "", hidden: false, isConnected: true, remove: vi.fn() };
+  const overlay = { style: { cssText: "" }, textContent: "", hidden: false, isConnected: true,
+    remove: vi.fn(), setAttribute: vi.fn() };
   vi.stubGlobal("window", globalThis);
   vi.stubGlobal("document", { querySelector: (selector: string) => selector === "video" ? null : ({ append: vi.fn() }), createElement: () => overlay });
   const sendMessage = vi.fn();
@@ -59,7 +60,7 @@ describe("live YouTube translation", () => {
     expect(overlay.textContent).toBe("Сайн уу");
     setCaption("");
     await vi.advanceTimersByTimeAsync(150);
-    expect(overlay.hidden).toBe(true);
+    expect(overlay.textContent).toContain("English CC");
     setCaption("Hello");
     await vi.advanceTimersByTimeAsync(750);
     expect(overlay.textContent).toBe("Сайн уу");

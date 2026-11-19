@@ -134,6 +134,7 @@ export class LiveTranslation {
     }
     if (video) this.lastVideoTime = video.currentTime;
     const cueKey = this.getCueKey() ?? source;
+    const stabilizationMs = this.getCueKey() ? 0 : 250;
     if (source !== this.source || cueKey !== this.cueKey) {
       if (this.source) this.history = [...this.history, { text: this.source, translatedText: this.cache.get(this.cacheKey) }].slice(-2);
       this.source = source;
@@ -147,7 +148,7 @@ export class LiveTranslation {
     this.speech.sync(video, source, translated, this.getCueEnd(), cueKey);
     if (translated && this.overlay?.textContent !== translated) this.render(translated);
     const ready = Boolean(translated && (!this.speech.enabled || this.speech.isPrepared(source, translated)));
-    if (Date.now() - this.changedAt >= 450) this.syncGate.update(video, source, ready || Boolean(this.error || this.speech.error));
+    if (Date.now() - this.changedAt >= stabilizationMs) this.syncGate.update(video, source, ready || Boolean(this.error || this.speech.error));
     if (this.syncGate.waiting && translated && this.speech.enabled && !this.speech.isPrepared(source, translated)) {
       const generation = this.generation;
       const videoRemaining = video && this.getCueEnd() !== undefined ? this.getCueEnd()! - video.currentTime : undefined;
@@ -157,10 +158,10 @@ export class LiveTranslation {
         this.syncGate.release(true);
       });
     }
-    // Only prefetch when the current line needs no translation request.
-    if (!source || this.cache.has(currentKey)) void this.prefetch();
+    // Timed transcripts let future cues prepare while the current cue translates.
+    void this.prefetch();
     if (!source || this.error || this.cache.has(currentKey) || this.activeKeys.has(currentKey)
-      || this.activeKeys.size >= 2 || Date.now() - this.changedAt < 450) return;
+      || this.activeKeys.size >= 2 || Date.now() - this.changedAt < stabilizationMs) return;
     const generation = this.generation;
     this.activeKeys.add(currentKey);
     this.render("LearnDub: Орчуулж байна…");
@@ -184,31 +185,31 @@ export class LiveTranslation {
   }
 
   private async prefetch() {
-    if (this.prefetching || this.error || !this.enabled || this.activeKeys.size >= 2) return;
+    // The current visible cue always owns the first request slot.
+    if (this.prefetching || this.error || !this.enabled || (this.source && !this.cache.has(this.cacheKey))) return;
     this.prefetching = true;
     const generation = this.generation;
+    let reservedKeys: string[] = [];
     try {
-      for (const cue of this.upcoming()) {
-        if (!this.enabled || generation !== this.generation || this.activeKeys.size >= 2) break;
-        const key = cue.key ?? cue.text;
-        let translated = this.cache.get(key);
-        if (!translated) {
-          if (this.activeKeys.has(key)) continue;
-          this.activeKeys.add(key);
-          let reply: Reply;
-          try {
-            reply = await this.translate(cue.text,
-              [...this.history, ...(this.source ? [{ text: this.source, translatedText: this.cache.get(this.cacheKey) }] : [])].slice(-2));
-          } finally { this.activeKeys.delete(key); }
-          if (!this.enabled || generation !== this.generation) break;
-          if (!reply?.ok || !reply.text) break;
-          translated = reply.text;
-          if (this.cache.size >= 300) this.cache.delete(this.cache.keys().next().value!);
-          this.cache.set(key, translated);
-        }
-        if (this.speech.enabled) await this.speech.prepare(cue.text, translated);
+      const cues = this.upcoming().map((cue) => ({ key: cue.key ?? cue.text, text: cue.text }))
+        .filter((cue) => !this.cache.has(cue.key) && !this.activeKeys.has(cue.key));
+      if (!cues.length) return;
+      reservedKeys = cues.map((cue) => cue.key);
+      for (const key of reservedKeys) this.activeKeys.add(key);
+      const reply = await chrome.runtime.sendMessage({ type: "LEARNDUB_TRANSLATE_BATCH", cues }) as
+        { ok?: boolean; translations?: Array<{ key: string; source: string; text: string }> };
+      if (!this.enabled || generation !== this.generation || !reply?.ok || !Array.isArray(reply.translations)) return;
+      for (const translated of reply.translations) {
+        if (this.cache.size >= 300) this.cache.delete(this.cache.keys().next().value!);
+        this.cache.set(translated.key, translated.text);
+      }
+      if (this.speech.enabled) {
+        await Promise.all(reply.translations.slice(0, 2).map((translated) => this.speech.prepare(translated.source, translated.text)));
       }
     } catch { /* Prefetch failure must not disable live translation. */ }
-    finally { if (generation === this.generation) this.prefetching = false; }
+    finally {
+      for (const key of reservedKeys) this.activeKeys.delete(key);
+      if (generation === this.generation) this.prefetching = false;
+    }
   }
 }

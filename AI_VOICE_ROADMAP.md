@@ -9,6 +9,10 @@
 - [ ] Cue-үүдийг бүтэн өгүүлбэрээр ухаалгаар нэгтгэж, амьсгал ба pause хадгалах.
 - [ ] Bataa/Yesui voice-ийг speaker болон дүрээр автоматаар сонгох.
 - [ ] TTS audio-г урьдчилан бэлтгэх priority queue, cancel болон latency telemetry нэмэх.
+- [x] YouTube signed timed transcript-ийг автоматаар авч, live cue-ээс түрүүлж translation/TTS cache хийх.
+- [x] Future cue бүрийг тусдаа request болгохгүй, priority-aware batch prefetch ашиглаж Ollama queue бөглөрөхөөс хамгаалах.
+- [x] Extension live горимд богино prompt, хязгаартай context/output budget, model keep-alive ашиглах.
+- [x] Cue солигдоход stale live/prefetch request-ийг abort хийж Ollama queue цэвэр байлгах.
 - [ ] Хэрэглэгчийн зөвшөөрөлтэй reference voice ашиглах local voice-cloning prototype судлах.
 - [ ] Монгол voice dataset-ийн consent, цэвэрлэгээ, transcript болон evaluation pipeline төлөвлөх.
 - [ ] Fine-tuned Монгол TTS model-ийн prototype, pronunciation/MOS/speaker-similarity үнэлгээ хийх.

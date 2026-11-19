@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "manhwa/**",
     "extension/**",
+    "companion/dist/**",
+    "release/**",
   ]),
 ]);
 

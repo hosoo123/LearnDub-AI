@@ -1,5 +1,7 @@
 # LearnDub AI
 
+Бүтээгдэхүүн болгох үе шат, Windows installer, live audio fallback болон Chrome Web Store ажлуудыг [PRODUCT_ROADMAP.md](./PRODUCT_ROADMAP.md)-оос харна уу. AI voice-ийн нарийвчилсан ажлууд [AI_VOICE_ROADMAP.md](./AI_VOICE_ROADMAP.md)-д байна.
+
 Сургалтын видео болон хадмалаа нэг дор нээж, англи яриаг Монгол хэлээр ойлгон сурахад зориулсан локал web апп.
 
 ## Юу хийж болох вэ?

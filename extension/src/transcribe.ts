@@ -1,6 +1,6 @@
 import { validateVideoCues, type VideoCue } from "./video-captions";
 import { getYouTubeVideoId } from "./captions";
-import { getServerUrl } from "./server-config";
+import { resolveServerUrl } from "./server-config";
 
 const params = new URLSearchParams(location.search);
 const tabId = Number(params.get("tab"));
@@ -34,7 +34,7 @@ fileInput.addEventListener("change", async () => {
     applyButton.disabled = downloadButton.disabled = true;
     cancelButton.disabled = false;
     status.textContent = "Яриаг таньж байна… Анхны удаа загвар татагдана. YouTube болон бусад табаа ашиглаж болно; энэ хуудсыг нээлттэй үлдээнэ үү.";
-    const response = await fetch(`${await getServerUrl()}/api/transcribe`, {
+    const response = await fetch(`${await resolveServerUrl()}/api/transcribe`, {
       method: "POST",
       headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(file.name), "X-Transcription-Quality": quality.value },
       body: file,

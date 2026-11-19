@@ -45,6 +45,6 @@ export class VideoCaptions {
 
   upcoming(videoId: string | undefined, time: number) {
     if (!this.hasFor(videoId)) return [];
-    return this.cues.filter((cue) => cue.start > time && cue.start <= time + 12).slice(0, 2);
+    return this.cues.filter((cue) => cue.start > time && cue.start <= time + 30).slice(0, 5);
   }
 }

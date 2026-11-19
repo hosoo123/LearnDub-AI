@@ -1,7 +1,10 @@
 {
   "name": "learndub-ai",
   "version": "0.1.0",
+  "description": "YouTube болон видео контентыг Монгол хадмал, AI дуугаар ойлгоход зориулсан local-first companion.",
+  "author": "LearnDub AI",
   "private": true,
+  "main": "companion/dist/main.cjs",
   "engines": {
     "node": ">=22.12.0"
   },
@@ -17,7 +20,11 @@
     "typecheck:extension-tests": "tsc --noEmit -p tsconfig.extension-tests.json",
     "build:extension": "node scripts/build-extension.mjs && npm run validate:extension",
     "validate:extension": "node scripts/validate-extension.mjs",
-    "package:extension": "npm run build:extension && node scripts/package-extension.mjs"
+    "package:extension": "npm run build:extension && node scripts/package-extension.mjs",
+    "build:companion": "node scripts/build-companion.mjs",
+    "dev:companion": "npm run build:companion && node scripts/run-companion.mjs",
+    "package:companion": "npm run build && node scripts/prepare-standalone.mjs && npm run build:companion && electron-builder --win nsis",
+    "install:electron": "install-electron"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.1",
@@ -32,6 +39,8 @@
     "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "^45.3.4",
+    "electron-builder": "^26.18.0",
     "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "^16.4.5",
@@ -40,7 +49,24 @@
     "vitest": "^5.1.0"
   },
   "allowScripts": {
-    "onnxruntime-node@1.30.0": true
+    "onnxruntime-node@1.30.0": true,
+    "esbuild@0.28.2": true,
+    "unrs-resolver@1.12.2": true,
+    "protobufjs@7.6.6": true,
+    "electron-winstaller@5.4.0": true
+  },
+  "build": {
+    "appId": "ai.learndub.companion",
+    "productName": "LearnDub AI",
+    "directories": { "output": "release" },
+    "files": ["companion/dist/**/*", "package.json"],
+    "extraResources": [{ "from": ".next/standalone", "to": "server" }],
+    "win": { "target": ["nsis"] },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
   },
   "overrides": {
     "@typescript-eslint/typescript-estree": {

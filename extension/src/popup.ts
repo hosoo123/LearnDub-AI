@@ -1,5 +1,5 @@
 import { getYouTubeVideoId } from "./captions";
-import { getServerUrl, normalizeServerUrl } from "./server-config";
+import { getServerUrl, normalizeServerUrl, resolveServerUrl } from "./server-config";
 type ContentReply = {
   ok?: boolean;
   error?: string;
@@ -208,7 +208,7 @@ stopButton?.addEventListener("click", async () => {
 
 openAppButton?.addEventListener("click", async () => {
   try {
-    await chrome.tabs.create({ url: await getServerUrl() });
+    await chrome.tabs.create({ url: await resolveServerUrl() });
   } catch (error) {
     showError(error);
   }

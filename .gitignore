@@ -45,3 +45,5 @@ next-env.d.ts
 /extension/learndub-ai-chrome.zip
 /runtime-logs/
 /learndub-dev*.log
+/companion/dist/
+/release/

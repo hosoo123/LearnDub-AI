@@ -120,8 +120,16 @@ chrome.runtime.onMessage.addListener((message: CaptureMessage, _sender, sendResp
   }
   if (message.type === "LEARNDUB_TRANSLATION_TOGGLE") {
     if (!getVideoId()) { sendResponse({ ok: false, error: "YouTube видео нээнэ үү." }); return; }
-    sendResponse({ ok: true, translating: liveTranslation.toggle() });
-    return;
+    if (liveTranslation.enabled) { sendResponse({ ok: true, translating: liveTranslation.toggle() }); return; }
+    void (async () => {
+      const videoId = getVideoId()!;
+      try {
+        const reply = await chrome.runtime.sendMessage({ type: "LEARNDUB_LOAD_TRANSCRIPT" });
+        if (reply?.ok && Array.isArray(reply.cues)) videoCaptions.load(videoId, reply.cues);
+      } catch { /* Live visible-CC mode remains available as fallback. */ }
+      sendResponse({ ok: true, translating: liveTranslation.toggle(), timedTranscript: videoCaptions.hasFor(videoId) });
+    })();
+    return true;
   }
   if (message.type === "LEARNDUB_CAPTURE_START") {
     sendResponse(startCapture());

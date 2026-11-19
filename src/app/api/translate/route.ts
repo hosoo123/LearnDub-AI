@@ -24,8 +24,12 @@ export async function POST(request: Request) {
   try {
     const body: unknown = await request.json();
     const style = typeof body === "object" && body !== null && "style" in body ? body.style : "dialogue";
+    const speed = typeof body === "object" && body !== null && "speed" in body ? body.speed : "quality";
     if (style !== "dialogue" && style !== "song") {
       return Response.json({ error: "Орчуулгын төрөл 'dialogue' эсвэл 'song' байх ёстой." }, { status: 400 });
+    }
+    if (speed !== "quality" && speed !== "live") {
+      return Response.json({ error: "Орчуулгын хурд 'quality' эсвэл 'live' байх ёстой." }, { status: 400 });
     }
     if (typeof body === "object" && body !== null && "segments" in body) {
       const segments = body.segments;
@@ -49,7 +53,7 @@ export async function POST(request: Request) {
         id,
         text: text.trim(),
         ...(typeof contextTranslation === "string" && contextTranslation.trim() ? { contextTranslation: contextTranslation.trim() } : {}),
-      })), style);
+      })), style, speed);
       return Response.json({ status: "ready", translatedSegments });
     }
 

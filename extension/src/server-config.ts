@@ -12,3 +12,20 @@ export async function getServerUrl() {
   const stored = await chrome.storage.local.get("serverUrl");
   return normalizeServerUrl(stored.serverUrl);
 }
+
+export async function resolveServerUrl() {
+  const configured = await getServerUrl();
+  const candidates = [configured, ...Array.from({ length: 6 }, (_, index) => `http://localhost:${3000 + index}`)];
+  for (const candidate of [...new Set(candidates)]) {
+    try {
+      const response = await fetch(`${candidate}/api/health`, { signal: AbortSignal.timeout(1_500), cache: "no-store" });
+      if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) continue;
+      const body = await response.json();
+      if (body?.service === "learndub-ai") {
+        if (candidate !== configured) await chrome.storage.local.set({ serverUrl: candidate });
+        return candidate;
+      }
+    } catch { /* Try the next local port. */ }
+  }
+  throw new Error("LearnDub сервер олдсонгүй. npm run dev ажиллуулаад дахин оролдоно уу.");
+}

@@ -31,6 +31,12 @@ describe("video transcript playback", () => {
     expect(captions.hasFor("other")).toBe(false);
   });
 
+  it("returns up to five future cues for ahead-of-playback preparation", () => {
+    const captions = new VideoCaptions();
+    captions.load("video", Array.from({ length: 7 }, (_, index) => ({ start: index + 1, end: index + 1.5, text: `Cue ${index}` })));
+    expect(captions.upcoming("video", 0)).toHaveLength(5);
+  });
+
   it("rejects malformed transcripts before replacing a working one", () => {
     expect(() => validateVideoCues([{ start: -1, end: 2, text: "Bad" }])).toThrow();
     expect(() => validateVideoCues([{ start: 1, end: Infinity, text: "Bad" }])).toThrow();
